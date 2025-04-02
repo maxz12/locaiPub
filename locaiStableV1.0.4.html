@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LocAI - Local AI Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#f0f7ff',
+              100: '#e0eefe',
+              200: '#bcd9fe',
+              300: '#90bffd',
+              400: '#5d9efa',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#172554',
+            },
+            secondary: {
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+            },
+            dark: {
+              100: '#3f3f46',
+              200: '#27272a',
+              300: '#1f1f23',
+              400: '#18181b',
+              500: '#121215',
+              600: '#0d0d10',
+              700: '#08080a',
+              800: '#050506',
+              900: '#020203',
+            },
+            navy: {
+              800: '#0f172a',
+              900: '#0a0f1d',
+            },
+            emerald: {
+              900: '#064e3b',
+              950: '#022c22',
+            },
+            amber: {
+              900: '#451a03',
+              950: '#331303',
+            },
+            rose: {
+              900: '#4c0519',
+              950: '#2d0312',
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+  /* Ensure the status bar stays fixed at the top */
+  body {
+    padding-top: 56px; /* Slightly taller status bar */
+    padding-bottom: 70px; /* Height of the input bar */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+ :root {
+  /* Code Block Customization Variables */
+  --code-header-height: 1px;
+  --code-header-padding: 0.25rem 0.5rem;
+  --code-block-padding: 0.75rem;
+  --code-font-size: 0.8rem;
+  --code-line-height: 1.5;
+
+  /* Copy Button Customization */
+  --copy-btn-height: 18px;
+  --copy-btn-padding: 0.1rem 0.8rem;
+  --copy-btn-font-size: 0.7rem;
+  --copy-icon-size: 0.7rem;
+  --copy-icon-margin: 0.2rem;
+
+  /* Copy Text Customization */
+  --copy-text-display: inline; /* Can be 'none' to hide text */
+  --copy-text-margin-left: 0.2rem; /* Space between icon and text */
+  --copy-text-order: -5; /* 1 puts text before icon, 2 puts text after icon */
+  --copy-icon-order: 2; /* 1 puts icon before text, 2 puts icon after text */
+
+  /* Language Badge Customization */
+  --lang-badge-font-size: 0.7rem;
+  --lang-badge-dot-size: 6px;
+
+  /* Border and Styling */
+  --code-border-radius: 6px;
+  --code-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+
+  /* Then modify the existing character counter style */
+  #charCounter {
+    right: var(--char-counter-right) !important;
+    bottom: var(--char-counter-bottom) !important;
+  }
+
+  /* And add this for the update notification */
+  #updateBtn {
+    top: var(--update-notification-top) !important;
+    right: var(--update-notification-right) !important;
+  }
+  #statusBar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    background-color: rgba(5, 5, 6, 0.95);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    border-bottom: 1px solid rgba(31, 41, 55, 0.8);
+  }
+  /* Fix the input bar at the bottom */
+  #chatForm {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    background-color: rgba(5, 5, 6, 0.95);
+    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.4);
+    border-top: 1px solid rgba(31, 41, 55, 0.8);
+  }
+  /* Adjust the message container for proper scrolling */
+  #messages {
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    max-height: calc(100vh - 130px); /* Adjust for both status bar & input area */
+    padding-bottom: 20px;
+  }
+  #charCounter {
+    right: 180px !important; /* Adjust this value to move left/right */
+    bottom: 14px !important; /* Adjust this value to move up/down */
+  }
+  .logo-font {
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.03em;
+    font-weight: 800;
+  }
+  /* Mobile-specific adjustments for character counter */
+  @media (max-width: 640px) {
+    #charCounter {
+      right: 4.5rem !important;
+      bottom: 2px !important;
+      font-size: 0.65rem !important;
+    }
+  }
+  /* Settings panel */
+  #settingsPanel {
+    position: fixed;
+    right: -320px;
+    top: 56px;
+    width: 320px;
+    height: calc(100vh - 56px - 70px);
+    background-color: rgba(8, 8, 10, 0.97);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: right 0.3s ease;
+    z-index: 40;
+    overflow-y: auto;
+    border-left: 1px solid rgba(31, 41, 55, 0.8);
+  }
+  #settingsPanel.open {
+    right: 0;
+  }
+  .dropdown-select {
+    background-color: rgba(15, 23, 42, 0.6);
+    border: 1px solid #27272a;
+    color: white;
+    border-radius: 0.375rem;
+    padding: 0.5rem;
+    width: 100%;
+  }
+
+  /* Custom gradient background */
+  .gradient-bg {
+    background: linear-gradient(135deg, #0a0f1d 0%, #050506 100%);
+  }
+
+  /* Subtle effect for buttons with dark glow */
+  .subtle-effect {
+    box-shadow: 0 0 8px rgba(17, 24, 39, 0.6);
+    transition: all 0.3s ease;
+  }
+  .subtle-effect:hover {
+    box-shadow: 0 0 12px rgba(17, 24, 39, 0.8);
+  }
+
+  /* Message bubble styles */
+  .user-message {
+    background: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(8, 8, 10, 0.9));
+    border-radius: 18px 18px 4px 18px;
+    border-left: 1px solid #3730a3;
+  }
+  .assistant-message {
+    background: linear-gradient(to right, rgba(8, 8, 10, 0.9), rgba(10, 15, 29, 0.9));
+    border-radius: 18px 18px 18px 4px;
+    border-right: 1px solid #1e40af;
+  }
+  .system-message {
+    background: rgba(8, 8, 10, 0.9);
+    border-radius: 12px;
+    border-left: 2px solid #312e81;
+  }
+  /* Enhanced toast notifications that are always visible */
+#toastContainer {
+  position: fixed;
+  bottom: 90px !important;
+  right: 16px;
+  z-index: 100; /* Higher than modal's z-index of 50 */
+  pointer-events: none;
+  max-width: 90%;
+}
+
+#toastContainer > div {
+  pointer-events: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  background-color: rgba(17, 24, 39, 0.95); /* More opaque background */
+  backdrop-filter: none; /* Ensure no blur is applied */
+  -webkit-backdrop-filter: none;
+  margin-bottom: 8px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* Different toast types with stronger colors */
+#toastContainer > div.toast-success {
+  background-color: rgba(6, 78, 59, 0.95) !important; /* Darker green */
+  border-left: 3px solid #10b981;
+}
+
+#toastContainer > div.toast-error {
+  background-color: rgba(76, 5, 25, 0.95) !important; /* Darker red */
+  border-left: 3px solid #ef4444;
+}
+
+#toastContainer > div.toast-info {
+  background-color: rgba(30, 58, 138, 0.95) !important; /* Darker blue */
+  border-left: 3px solid #3b82f6;
+}
+
+/* Fix for mysterious bar without affecting visibility */
+body {
+  overflow-x: hidden; /* Prevent horizontal overflow */
+  margin: 0; /* Ensure no body margin */
+}
+
+/* Fix settings panel */
+#settingsPanel:not(.open) {
+  right: -320px;
+  visibility: hidden;
+}
+
+/* Fix toast container */
+#toastContainer {
+  pointer-events: none;
+  background: transparent !important;
+}
+
+/* Make sure elements in chat interface have correct styling when visible */
+#chatInterface.visible {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Ensure proper positioning of fixed elements */
+#statusBar, #chatForm {
+  width: 100%;
+  left: 0;
+  right: 0;
+}
+
+/* Simplified code block styling */
+.code-block-container {
+  position: relative;
+  margin: 1rem 0;
+  border: 1px solid rgba(45, 55, 72, 0.5);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(17, 24, 39, 0.7);
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(26, 32, 44, 0.9);
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #a0aec0;
+  border-bottom: 1px solid rgba(45, 55, 72, 0.5);
+  height: 24px;
+}
+
+.code-block-container pre {
+  margin: 0;
+  padding: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.code-block-container pre code {
+  display: block;
+  padding: 12px;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.copy-button {
+  display: flex;
+  align-items: center;
+  background: rgba(45, 55, 72, 0.7);
+  color: #e2e8f0;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  height: 18px;
+}
+
+.copy-button:hover {
+  background: rgba(66, 83, 109, 0.9);
+}
+
+.copy-button svg {
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+}
+
+.language-label {
+  display: flex;
+  align-items: center;
+}
+
+.language-label::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  background-color: #4c51bf;
+  border-radius: 50%;
+}
+
+/* Code scrollbar */
+.code-block-container pre::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.code-block-container pre::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.code-block-container pre::-webkit-scrollbar-thumb {
+  background: rgba(100, 100, 100, 0.5);
+  border-radius: 3px;
+}
+</style>
+</head>
+<body class="gradient-bg text-gray-100">
+  <div id="app" class="min-h-screen flex flex-col">
+   <!-- API Key Modal -->
+<div id="apiKeyModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+  <div class="bg-dark-700 rounded-xl shadow-2xl max-w-md w-full p-6 border border-dark-300">
+    <div class="flex flex-col items-center mb-6">
+      <!-- LocAI Logo - COMPLETELY FIXED -->
+      <!-- ULTRA SIMPLE LOGO -->
+<span class="text-3xl font-bold mb-4 logo-font">
+  <span class="text-primary-600">Loc</span><span class="text-secondary-600">AI</span>
+</span>
+      <h2 class="text-xl font-semibold mb-1">Local AI Chat</h2>
+      <p class="text-gray-400 text-sm mb-2 text-center">Secure, private chat powered by advanced AI models</p>
+    </div>
+
+    <p class="text-gray-300 mb-4">
+      Please enter your API key to use the chat functionality.
+      This key will be validated through our secure system.
+    </p>
+
+    <form id="apiKeyForm" class="space-y-4">
+      <div class="relative">
+        <input
+          type="text"
+          id="apiKeyInput"
+          placeholder="Enter your API key..."
+          class="w-full bg-dark-600/80 rounded-lg px-4 py-3 focus:outline-none focus:ring-1 focus:ring-dark-100 border border-dark-300"
+        >
+        <svg class="w-5 h-5 absolute right-3 top-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 21l-4-4 1.257-3.257A6 6 0 1121 9z"/>
+        </svg>
+      </div>
+      <div id="apiKeyError" class="text-rose-500 text-sm hidden"></div>
+      <div class="flex justify-end">
+        <button
+          type="submit"
+          class="bg-gradient-to-r from-navy-800 to-secondary-900 hover:from-navy-800 hover:to-secondary-800 px-5 py-2.5 rounded-lg font-medium text-white transition-all duration-200 border border-dark-200"
+        >Continue</button>
+      </div>
+    </form>
+
+    <div class="mt-6 pt-4 border-t border-dark-300">
+      <p class="text-xs text-gray-500 text-center">LocAI v<span id="appVersionDisplay"></span> - Secure, private, and runs on your device</p>
+    </div>
+  </div>
+</div>
+
+    <!-- Main Chat Interface -->
+    <div class="flex-1 flex flex-col" style="display: none" id="chatInterface">
+     <!-- Status Bar - fixed at top -->
+<div id="statusBar" class="px-4 py-3">
+  <div class="flex justify-between items-center">
+   <div class="flex items-center">
+  <!-- SINGLE LOGO -->
+  <span class="text-lg font-bold logo-font">
+    <span class="text-primary-600">Loc</span><span class="text-secondary-600">AI</span>
+  </span>
+
+  <button id="settingsBtn" class="ml-2 p-1.5 rounded-full bg-dark-500/70 text-gray-400 hover:text-white hover:bg-dark-400 transition-all duration-200 border border-dark-300">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+    </svg>
+  </button>
+</div>
+
+    <div class="flex space-x-4">
+      <div class="flex items-center bg-dark-600/80 px-3 py-1 rounded-full border border-dark-400">
+        <span class="text-sm mr-2">Model:</span>
+        <span id="currentModel" class="text-primary-500 text-sm font-medium"></span>
+      </div>
+
+      <div class="flex items-center bg-dark-600/80 px-3 py-1 rounded-full border border-dark-400">
+        <span class="text-sm mr-2">Style:</span>
+        <span id="currentStyle" class="text-secondary-500 text-sm font-medium"></span>
+      </div>
+
+      <div class="flex items-center bg-dark-600/80 px-3 py-1 rounded-full border border-dark-400">
+        <span class="text-sm mr-2">Tokens:</span>
+        <span id="keyStatus" class="text-emerald-500 text-sm font-medium"></span>
+      </div>
+
+      <div class="flex items-center bg-dark-600/80 px-3 py-1 rounded-full border border-dark-400">
+        <span class="text-sm mr-2">Messages:</span>
+        <span id="messageCount" class="text-amber-500 text-sm font-medium">0</span>
+      </div>
+
+      <button id="logoutBtn" class="flex items-center bg-dark-600/80 hover:bg-dark-500 text-rose-500 hover:text-rose-400 px-3 py-1 rounded-full transition-all duration-200 border border-dark-400" title="Logout">
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        <span class="text-sm">Logout</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+      <!-- Settings Panel -->
+      <div id="settingsPanel" class="shadow-lg">
+        <div class="p-4">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">Settings</h3>
+            <button id="closeSettingsBtn" class="text-gray-400 hover:text-white">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Model Selection -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">Model</label>
+            <select id="modelSelect" class="dropdown-select">
+              <!-- Will be populated by JavaScript -->
+            </select>
+          </div>
+
+          <!-- Style Selection -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">Style</label>
+            <select id="styleSelect" class="dropdown-select">
+              <!-- Will be populated by JavaScript -->
+            </select>
+          </div>
+
+          <!-- Custom Style Management -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">Custom Style</label>
+            <div class="flex mb-2">
+              <button id="newStyleBtn" class="bg-emerald-950 hover:bg-emerald-900 text-white px-3 py-1 rounded mr-2 border border-dark-300">New</button>
+              <button id="editStyleBtn" class="bg-navy-900 hover:bg-navy-800 text-white px-3 py-1 rounded mr-2 border border-dark-300">Edit</button>
+              <button id="deleteStyleBtn" class="bg-rose-950 hover:bg-rose-900 text-white px-3 py-1 rounded border border-dark-300">Delete</button>
+            </div>
+          </div>
+
+          <!-- Custom Style Input Form -->
+          <div id="styleForm" class="mb-4 hidden">
+            <textarea id="styleText" class="w-full bg-dark-600 border border-dark-300 rounded p-2 text-sm" rows="4" placeholder="Enter style prompt text..."></textarea>
+            <div class="flex justify-end mt-2">
+              <button id="cancelStyleBtn" class="bg-dark-500 hover:bg-dark-400 text-white px-3 py-1 rounded mr-2 border border-dark-300">Cancel</button>
+              <button id="saveStyleBtn" class="bg-navy-900 hover:bg-navy-800 text-white px-3 py-1 rounded border border-dark-300">Save</button>
+            </div>
+          </div>
+
+          <!-- Other Actions -->
+          <div class="border-t border-dark-300 pt-4 mt-4">
+            <button id="clearHistoryBtn" class="w-full bg-dark-600 hover:bg-dark-500 text-white px-4 py-2 rounded mb-2 flex items-center justify-center border border-dark-300">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+              Clear Chat History
+            </button>
+            <button id="keyStatusBtn" class="w-full bg-dark-600 hover:bg-dark-500 text-white px-4 py-2 rounded mb-2 flex items-center justify-center border border-dark-300">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 21l-4-4 1.257-3.257A6 6 0 1121 9z"/>
+              </svg>
+              View API Key Status
+            </button>
+            <button id="versionInfoBtn" class="w-full bg-dark-600 hover:bg-dark-500 text-white px-4 py-2 rounded flex items-center justify-center border border-dark-300">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              Version Information
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div id="messages" class="flex-1 p-4 space-y-4"></div>
+
+      <!-- Input Form - fixed at bottom -->
+      <form id="chatForm" class="p-4">
+        <div class="flex gap-3 relative">
+          <input
+            type="text"
+            id="messageInput"
+            placeholder="Type your message here..."
+            class="flex-1 bg-dark-600/80 text-gray-100 rounded-full px-5 py-3 focus:outline-none focus:ring-1 focus:ring-dark-100 border border-dark-300"
+            maxlength="2000"
+          >
+          <div id="charCounter" class="absolute right-[6.5rem] bottom-3 px-2 py-0.5 text-xs font-medium rounded-full transition-colors duration-200 bg-dark-500/80 text-gray-400 border border-dark-400">
+            <span id="currentChars">0</span>/<span id="maxChars">2000</span>
+          </div>
+          <button
+            type="button"
+            id="helpBtn"
+            class="p-2.5 bg-dark-600/80 hover:bg-dark-500 text-gray-400 hover:text-white rounded-full transition-all duration-200 border border-dark-400"
+            title="Show Help"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </button>
+          <button
+            type="button"
+            id="clearBtn"
+            class="p-2.5 bg-dark-600/80 hover:bg-dark-500 text-rose-500 hover:text-rose-400 rounded-full transition-all duration-200 border border-dark-400"
+            title="Clear History"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+          </button>
+          <button
+            type="submit"
+            class="p-2.5 bg-gradient-to-r from-navy-900 to-secondary-900 hover:from-navy-800 hover:to-secondary-800 text-white rounded-full transition-all duration-200 border border-dark-300"
+            id="sendButton"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-20 right-4 z-50 space-y-2"></div>
+  </div>
+
+  <script>
+    const iYAEM=nHfEwcMw;(function(gHJLjCfQmLBwFtpA,vKdvlBPXRyscFMq){const mR_CYlADRZCnwOyCArrx=nHfEwcMw,CX_ltXPojLcMpDxcyswPZW=gHJLjCfQmLBwFtpA();while(!![]){try{const NqJaIIev$q$B=-parseFloat(mR_CYlADRZCnwOyCArrx(0x23d))/(0x991+0x1a7c+Math.ceil(parseInt(0x2))*Number(-parseInt(0x1206)))*(parseFloat(mR_CYlADRZCnwOyCArrx(0x147))/(parseFloat(-0x24f1)+Math.max(-0x18f8,-parseInt(0x18f8))+Number(0xb)*Math.max(0x5a1,0x5a1)))+-parseFloat(mR_CYlADRZCnwOyCArrx(0x209))/(-0x199d+parseFloat(-parseInt(0x20b))+Math.ceil(0x1)*parseFloat(parseInt(0x1bab)))*parseInt(parseFloat(mR_CYlADRZCnwOyCArrx(0x1dc))/(-parseInt(0xa81)+-0xef6+Math.trunc(0x197b)))+-parseFloat(mR_CYlADRZCnwOyCArrx(0x254))/(parseInt(0x5d5)+Math.ceil(-0x2)*0x551+-0x269*Math.max(-0x2,-0x2))+parseFloat(-parseFloat(mR_CYlADRZCnwOyCArrx(0x2ad))/(0xf54+parseInt(0x4f4)+Math.ceil(0x1442)*-0x1))+parseFloat(mR_CYlADRZCnwOyCArrx(0x27a))/(-parseInt(0x1ba9)+-parseInt(0x97)*-0x2f+parseInt(0x3)*Number(-0x3))+Math['floor'](-parseFloat(mR_CYlADRZCnwOyCArrx(0x149))/(Math.trunc(-parseInt(0x3))*parseInt(0x9eb)+Math.trunc(-parseInt(0xfa3))+-0x26*Number(-0x132)))*(parseFloat(mR_CYlADRZCnwOyCArrx(0x135))/(Number(0x20)*parseFloat(parseInt(0x85))+Math.trunc(-parseInt(0x4))*-parseInt(0x313)+-parseInt(0x1ce3)))+-parseFloat(mR_CYlADRZCnwOyCArrx(0x256))/(parseInt(0x2)*0x10f1+parseFloat(parseInt(0xa7b))*-parseInt(0x2)+Math.trunc(-0xce2))*parseFloat(-parseFloat(mR_CYlADRZCnwOyCArrx(0x27d))/(parseInt(0x3bc)+Number(0x68d)*parseInt(0x1)+-parseInt(0xa3e)));if(NqJaIIev$q$B===vKdvlBPXRyscFMq)break;else CX_ltXPojLcMpDxcyswPZW['push'](CX_ltXPojLcMpDxcyswPZW['shift']());}catch(SHQSdCDgPKEYDWvk){CX_ltXPojLcMpDxcyswPZW['push'](CX_ltXPojLcMpDxcyswPZW['shift']());}}}(EXNHQ,-parseInt(0xfeb)*Math.max(parseInt(0xf),parseInt(0xf))+0x41436+parseInt(0x2daa1)));const APP_VERSION=iYAEM(0x243);let isUpdateAvailable=![],forceUpdate=![];const SUPABASE_URL=iYAEM(0x1e9),SUPABASE_ANON_KEY=iYAEM(0x126),supabaseClient=supabase[iYAEM(0x2b5)](SUPABASE_URL,SUPABASE_ANON_KEY);function initSettingsPanel(){const cYDdnaw_vq_Rw=iYAEM,pH_IJUDNnb$yBgcBzGxNdYcr=document[cYDdnaw_vq_Rw(0x22a)](cYDdnaw_vq_Rw(0x1ea)),PvMHC$pzgJ$yGLJB=document[cYDdnaw_vq_Rw(0x22a)](cYDdnaw_vq_Rw(0x2b0)),beZAdQDqnLLSBmrygefw=document[cYDdnaw_vq_Rw(0x22a)](cYDdnaw_vq_Rw(0x124));pH_IJUDNnb$yBgcBzGxNdYcr[cYDdnaw_vq_Rw(0x12f)](cYDdnaw_vq_Rw(0x22f),()=>{const DLUlQKsiBYCANI$CyV=cYDdnaw_vq_Rw;beZAdQDqnLLSBmrygefw[DLUlQKsiBYCANI$CyV(0x1cb)][DLUlQKsiBYCANI$CyV(0x1c5)](DLUlQKsiBYCANI$CyV(0x1c4));}),PvMHC$pzgJ$yGLJB[cYDdnaw_vq_Rw(0x12f)](cYDdnaw_vq_Rw(0x22f),()=>{const FRsJXy=cYDdnaw_vq_Rw;beZAdQDqnLLSBmrygefw[FRsJXy(0x1cb)][FRsJXy(0x191)](FRsJXy(0x1c4));});}function populateModelDropdown(){const YoYBVbvKgKAoaysVJ=iYAEM,EHoHpbvUnZrGjnDSGEqGcJv=document[YoYBVbvKgKAoaysVJ(0x22a)](YoYBVbvKgKAoaysVJ(0x216));EHoHpbvUnZrGjnDSGEqGcJv[YoYBVbvKgKAoaysVJ(0x1ee)]='',Object[YoYBVbvKgKAoaysVJ(0x1a9)](MODELS)[YoYBVbvKgKAoaysVJ(0x248)](([Ui_IYpNDRLAXDdl,YYOVkXmMNwQPoL_x$lcbJ])=>{const NejqWAwRAXYgmtUkdu$lNkAhBx=YoYBVbvKgKAoaysVJ,f$x_wwD=document[NejqWAwRAXYgmtUkdu$lNkAhBx(0x132)](NejqWAwRAXYgmtUkdu$lNkAhBx(0x245));f$x_wwD[NejqWAwRAXYgmtUkdu$lNkAhBx(0x122)]=Ui_IYpNDRLAXDdl,f$x_wwD[NejqWAwRAXYgmtUkdu$lNkAhBx(0x1fc)]=Ui_IYpNDRLAXDdl+'.\x20'+YYOVkXmMNwQPoL_x$lcbJ[NejqWAwRAXYgmtUkdu$lNkAhBx(0x1ed)],f$x_wwD[NejqWAwRAXYgmtUkdu$lNkAhBx(0x17d)]=Ui_IYpNDRLAXDdl===currentModel,EHoHpbvUnZrGjnDSGEqGcJv[NejqWAwRAXYgmtUkdu$lNkAhBx(0x221)](f$x_wwD);}),EHoHpbvUnZrGjnDSGEqGcJv[YoYBVbvKgKAoaysVJ(0x12f)](YoYBVbvKgKAoaysVJ(0x175),function(){const IjQEAnlOgsVZ=YoYBVbvKgKAoaysVJ;changeModel(this[IjQEAnlOgsVZ(0x122)]);});}function populateStyleDropdown(){const RTVKEnfRdoW$gd=iYAEM,qNnvhErYcWJdbRn=document[RTVKEnfRdoW$gd(0x22a)](RTVKEnfRdoW$gd(0x257)),zItLzOWn$bViw=qNnvhErYcWJdbRn,cHACAVHNnBUbvSJKkcSj=zItLzOWn$bViw[RTVKEnfRdoW$gd(0x123)](![]);zItLzOWn$bViw[RTVKEnfRdoW$gd(0x1f7)][RTVKEnfRdoW$gd(0x237)](cHACAVHNnBUbvSJKkcSj,zItLzOWn$bViw),Object[RTVKEnfRdoW$gd(0x1a9)](STYLES)[RTVKEnfRdoW$gd(0x248)](([VjWKydYX,LjJfBbpeZKeAcr])=>{const TMhgvFoISetXfoqy=RTVKEnfRdoW$gd,DXpjOXlS$_r=document[TMhgvFoISetXfoqy(0x132)](TMhgvFoISetXfoqy(0x245));DXpjOXlS$_r[TMhgvFoISetXfoqy(0x122)]=VjWKydYX,DXpjOXlS$_r[TMhgvFoISetXfoqy(0x1fc)]=VjWKydYX+'.\x20'+LjJfBbpeZKeAcr[TMhgvFoISetXfoqy(0x1ed)]+(DEFAULT_STYLES[VjWKydYX]?'':TMhgvFoISetXfoqy(0x1a6)),DXpjOXlS$_r[TMhgvFoISetXfoqy(0x17d)]=VjWKydYX===currentStyle,cHACAVHNnBUbvSJKkcSj[TMhgvFoISetXfoqy(0x221)](DXpjOXlS$_r);}),cHACAVHNnBUbvSJKkcSj[RTVKEnfRdoW$gd(0x12f)](RTVKEnfRdoW$gd(0x175),function(){const PCXaq$YsYVXSxDpUDkHokM=RTVKEnfRdoW$gd;changeStyle(this[PCXaq$YsYVXSxDpUDkHokM(0x122)]);});}function initStyleForm(){const qpPM_bVaBOrrPjhxlF$Y=iYAEM,eKz$vVmhWv_YmAOCAQaRRfO=document[qpPM_bVaBOrrPjhxlF$Y(0x22a)](qpPM_bVaBOrrPjhxlF$Y(0x1fb)),XCsMXEvrGELi=document[qpPM_bVaBOrrPjhxlF$Y(0x22a)](qpPM_bVaBOrrPjhxlF$Y(0x217)),Y$APJzAHMzSNa=document[qpPM_bVaBOrrPjhxlF$Y(0x22a)](qpPM_bVaBOrrPjhxlF$Y(0x16d)),wVbrilZELDjVa_eAFwgpR=document[qpPM_bVaBOrrPjhxlF$Y(0x22a)](qpPM_bVaBOrrPjhxlF$Y(0x26f)),sbakUrWFRrBayvlVout=document[qpPM_bVaBOrrPjhxlF$Y(0x22a)](qpPM_bVaBOrrPjhxlF$Y(0x1b0)),EiHvdJIw_RRpGLKJv=document[qpPM_bVaBOrrPjhxlF$Y(0x22a)](qpPM_bVaBOrrPjhxlF$Y(0x1e8)),QNTytvnRrlaBT=document[qpPM_bVaBOrrPjhxlF$Y(0x22a)](qpPM_bVaBOrrPjhxlF$Y(0x197));let dywrWr$eEHuheA=![],W$ArAaqZLBKVBmLnf=null;const R$ZYyrdELgQxKfSd_pt=y$bQxkxqWNeCjQHMMlt=>{const trkNVVWzEKdnxIfeAZOA=qpPM_bVaBOrrPjhxlF$Y,h_mJbdKgmvVvCIQaTE$oj=document[trkNVVWzEKdnxIfeAZOA(0x22a)](y$bQxkxqWNeCjQHMMlt),MLQzPP$nh_p=h_mJbdKgmvVvCIQaTE$oj[trkNVVWzEKdnxIfeAZOA(0x123)](!![]);return h_mJbdKgmvVvCIQaTE$oj[trkNVVWzEKdnxIfeAZOA(0x1f7)][trkNVVWzEKdnxIfeAZOA(0x237)](MLQzPP$nh_p,h_mJbdKgmvVvCIQaTE$oj),MLQzPP$nh_p;},aXRPmXiGMjElXtmWymbY$GCwv_J=R$ZYyrdELgQxKfSd_pt(qpPM_bVaBOrrPjhxlF$Y(0x1fb)),vgIlSfnX$ARkfiWLVIS=R$ZYyrdELgQxKfSd_pt(qpPM_bVaBOrrPjhxlF$Y(0x217)),O_Lo_NHjKzPzlYGfZKxJE=R$ZYyrdELgQxKfSd_pt(qpPM_bVaBOrrPjhxlF$Y(0x16d)),sZu$URF=R$ZYyrdELgQxKfSd_pt(qpPM_bVaBOrrPjhxlF$Y(0x1e8)),ReZUQKvB$$o=R$ZYyrdELgQxKfSd_pt(qpPM_bVaBOrrPjhxlF$Y(0x197));aXRPmXiGMjElXtmWymbY$GCwv_J[qpPM_bVaBOrrPjhxlF$Y(0x12f)](qpPM_bVaBOrrPjhxlF$Y(0x22f),()=>{const NVGSv_vYCUklNj_ROlp=qpPM_bVaBOrrPjhxlF$Y;dywrWr$eEHuheA=![],W$ArAaqZLBKVBmLnf=null,sbakUrWFRrBayvlVout[NVGSv_vYCUklNj_ROlp(0x122)]='',wVbrilZELDjVa_eAFwgpR[NVGSv_vYCUklNj_ROlp(0x1cb)][NVGSv_vYCUklNj_ROlp(0x191)](NVGSv_vYCUklNj_ROlp(0x24a));}),vgIlSfnX$ARkfiWLVIS[qpPM_bVaBOrrPjhxlF$Y(0x12f)](qpPM_bVaBOrrPjhxlF$Y(0x22f),()=>{const RQOFInwB_$r=qpPM_bVaBOrrPjhxlF$Y,tDiPsb_vxGAl=document[RQOFInwB_$r(0x22a)](RQOFInwB_$r(0x257))[RQOFInwB_$r(0x122)];if(DEFAULT_STYLES[tDiPsb_vxGAl]){showToast(RQOFInwB_$r(0x1cd),RQOFInwB_$r(0x1d9));return;}dywrWr$eEHuheA=!![],W$ArAaqZLBKVBmLnf=tDiPsb_vxGAl,sbakUrWFRrBayvlVout[RQOFInwB_$r(0x122)]=STYLES[tDiPsb_vxGAl][RQOFInwB_$r(0x14f)],wVbrilZELDjVa_eAFwgpR[RQOFInwB_$r(0x1cb)][RQOFInwB_$r(0x191)](RQOFInwB_$r(0x24a));}),O_Lo_NHjKzPzlYGfZKxJE[qpPM_bVaBOrrPjhxlF$Y(0x12f)](qpPM_bVaBOrrPjhxlF$Y(0x22f),()=>{const klDmn$s$uNGHPRbB=qpPM_bVaBOrrPjhxlF$Y,javl$AtChsisBv=document[klDmn$s$uNGHPRbB(0x22a)](klDmn$s$uNGHPRbB(0x257))[klDmn$s$uNGHPRbB(0x122)];deleteCustomStyle(javl$AtChsisBv)&&populateStyleDropdown();}),sZu$URF[qpPM_bVaBOrrPjhxlF$Y(0x12f)](qpPM_bVaBOrrPjhxlF$Y(0x22f),()=>{const PUnMc_DlnQzlGeNgt=qpPM_bVaBOrrPjhxlF$Y;wVbrilZELDjVa_eAFwgpR[PUnMc_DlnQzlGeNgt(0x1cb)][PUnMc_DlnQzlGeNgt(0x1c5)](PUnMc_DlnQzlGeNgt(0x24a));}),ReZUQKvB$$o[qpPM_bVaBOrrPjhxlF$Y(0x12f)](qpPM_bVaBOrrPjhxlF$Y(0x22f),()=>{const ZTLARoBweRTXTaIAcsvwrKP=qpPM_bVaBOrrPjhxlF$Y,SndwgN=sbakUrWFRrBayvlVout[ZTLARoBweRTXTaIAcsvwrKP(0x122)][ZTLARoBweRTXTaIAcsvwrKP(0x134)]();if(!SndwgN){showToast(ZTLARoBweRTXTaIAcsvwrKP(0x29c),ZTLARoBweRTXTaIAcsvwrKP(0x1d9));return;}if(dywrWr$eEHuheA&&W$ArAaqZLBKVBmLnf)STYLES[W$ArAaqZLBKVBmLnf][ZTLARoBweRTXTaIAcsvwrKP(0x14f)]=SndwgN,customStyles[W$ArAaqZLBKVBmLnf]=STYLES[W$ArAaqZLBKVBmLnf],saveCustomStyles(),showToast(ZTLARoBweRTXTaIAcsvwrKP(0x201)+W$ArAaqZLBKVBmLnf+ZTLARoBweRTXTaIAcsvwrKP(0x262),ZTLARoBweRTXTaIAcsvwrKP(0x1d2));else{const iD_ct$zZNGoeJfn=addCustomStyle(SndwgN);changeStyle(iD_ct$zZNGoeJfn);}wVbrilZELDjVa_eAFwgpR[ZTLARoBweRTXTaIAcsvwrKP(0x1cb)][ZTLARoBweRTXTaIAcsvwrKP(0x1c5)](ZTLARoBweRTXTaIAcsvwrKP(0x24a)),populateStyleDropdown();});}function initButtons(){const vdTZpDLiuNGak_AXthgX=iYAEM;document[vdTZpDLiuNGak_AXthgX(0x22a)](vdTZpDLiuNGak_AXthgX(0x295))[vdTZpDLiuNGak_AXthgX(0x12f)](vdTZpDLiuNGak_AXthgX(0x22f),showHelp),document[vdTZpDLiuNGak_AXthgX(0x22a)](vdTZpDLiuNGak_AXthgX(0x17f))[vdTZpDLiuNGak_AXthgX(0x12f)](vdTZpDLiuNGak_AXthgX(0x22f),clearHistory),document[vdTZpDLiuNGak_AXthgX(0x22a)](vdTZpDLiuNGak_AXthgX(0x204))[vdTZpDLiuNGak_AXthgX(0x12f)](vdTZpDLiuNGak_AXthgX(0x22f),clearHistory),document[vdTZpDLiuNGak_AXthgX(0x22a)](vdTZpDLiuNGak_AXthgX(0x18b))[vdTZpDLiuNGak_AXthgX(0x12f)](vdTZpDLiuNGak_AXthgX(0x22f),showKeyInfo),document[vdTZpDLiuNGak_AXthgX(0x22a)](vdTZpDLiuNGak_AXthgX(0x130))[vdTZpDLiuNGak_AXthgX(0x12f)](vdTZpDLiuNGak_AXthgX(0x22f),showVersionInfo);}const originalInitFunction=init;init=async function(){await originalInitFunction(),initSettingsPanel(),populateModelDropdown(),populateStyleDropdown(),initStyleForm(),initButtons(),initCharCounter();};const MODELS={'1':{'id':iYAEM(0x1a2),'name':iYAEM(0x298)},'2':{'id':iYAEM(0x15f),'name':iYAEM(0x218)},'3':{'id':iYAEM(0x26e),'name':iYAEM(0x227)},'4':{'id':iYAEM(0x110),'name':iYAEM(0x293)},'5':{'id':iYAEM(0x21a),'name':iYAEM(0x188)},'6':{'id':iYAEM(0x224),'name':iYAEM(0x1d0)},'7':{'id':iYAEM(0x174),'name':iYAEM(0x21d)},'8':{'id':iYAEM(0x2a3),'name':iYAEM(0x265)}},DEFAULT_STYLES={'1':{'name':iYAEM(0x264),'text':iYAEM(0x232)},'2':{'name':iYAEM(0x1c3),'text':iYAEM(0x176)},'3':{'name':iYAEM(0x137),'text':iYAEM(0x20f)}};function nHfEwcMw(F$DRWWfCNBjQmpa_A,cTrcbPA$CVOKF$lw){const HNdW_DnPdG=EXNHQ();return nHfEwcMw=function(MYlXWzlNOaxxGxl,mFVrLaKNpLlRvsJH$ZqRPmv){MYlXWzlNOaxxGxl=MYlXWzlNOaxxGxl-(parseInt(0x84a)+parseInt(0xbeb)*-0x2+parseInt(0x7)*parseFloat(0x25f));let ehTB$i_Wux=HNdW_DnPdG[MYlXWzlNOaxxGxl];if(nHfEwcMw['sHCyxC']===undefined){const qt$sQtQ=function(d$PGEwTErH){let egi_ku$pJot=0x6af+parseFloat(-parseInt(0x3))*parseInt(0x1b2)+-0xae&parseInt(0x964)+Math.ceil(0x1715)+parseFloat(-parseInt(0x1f7a)),ny_vix=new Uint8Array(d$PGEwTErH['match'](/.{1,2}/g)['map'](RmvHL=>parseInt(RmvHL,-0x685*parseInt(0x1)+-0xd13+Math.trunc(parseInt(0x13a8))))),grVLmDtPOZY=ny_vix['map'](YIrxYWU=>YIrxYWU^egi_ku$pJot),QTyjlVCjsTNksSwuGRjkgVZj=new TextDecoder(),XZuUmV_Xedz_Ihylxn=QTyjlVCjsTNksSwuGRjkgVZj['decode'](grVLmDtPOZY);return XZuUmV_Xedz_Ihylxn;};nHfEwcMw['xEoZUM']=qt$sQtQ,F$DRWWfCNBjQmpa_A=arguments,nHfEwcMw['sHCyxC']=!![];}const HlYiRuaclEi=HNdW_DnPdG[-0x1b66+Math.ceil(-parseInt(0xc98))+-parseInt(0x1)*-parseInt(0x27fe)],yIEo$AJjqFgVMDaoE=MYlXWzlNOaxxGxl+HlYiRuaclEi,GNakxr$BWgh=F$DRWWfCNBjQmpa_A[yIEo$AJjqFgVMDaoE];return!GNakxr$BWgh?(nHfEwcMw['wUnJpD']===undefined&&(nHfEwcMw['wUnJpD']=!![]),ehTB$i_Wux=nHfEwcMw['xEoZUM'](ehTB$i_Wux),F$DRWWfCNBjQmpa_A[yIEo$AJjqFgVMDaoE]=ehTB$i_Wux):ehTB$i_Wux=GNakxr$BWgh,ehTB$i_Wux;},nHfEwcMw(F$DRWWfCNBjQmpa_A,cTrcbPA$CVOKF$lw);}let currentModel='4',currentStyle='1',conversationHistory=[],isProcessing=![],validatedApiKey=null,deviceId=null,keyInfo={'requestsRemaining':null,'expiresAt':null,'name':''};const apiKeyModal=document[iYAEM(0x22a)](iYAEM(0x11f)),apiKeyForm=document[iYAEM(0x22a)](iYAEM(0x1e6)),apiKeyInput=document[iYAEM(0x22a)](iYAEM(0x244)),apiKeyError=document[iYAEM(0x22a)](iYAEM(0x15e)),chatInterface=document[iYAEM(0x22a)](iYAEM(0x18f)),messages=document[iYAEM(0x22a)](iYAEM(0x1fa)),chatForm=document[iYAEM(0x22a)](iYAEM(0x213)),messageInput=document[iYAEM(0x22a)](iYAEM(0x13e)),sendButton=document[iYAEM(0x22a)](iYAEM(0x1f0)),currentModelEl=document[iYAEM(0x22a)](iYAEM(0x184)),currentStyleEl=document[iYAEM(0x22a)](iYAEM(0x19d)),messageCountEl=document[iYAEM(0x22a)](iYAEM(0x1a0)),keyStatusEl=document[iYAEM(0x22a)](iYAEM(0x28c)),toastContainer=document[iYAEM(0x22a)](iYAEM(0x1df)),logoutBtn=document[iYAEM(0x22a)](iYAEM(0x24f));async function generateDeviceId(){const wUcQlCIBgZG$Jvq_PHoExfgIAt=iYAEM;try{const BAWvdgBVaTRq=navigator[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x23b)],ykYRmWnGt_eFr$f=navigator[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x1c1)],hA$oPNtpmf=window[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x29d)][wUcQlCIBgZG$Jvq_PHoExfgIAt(0x280)]+'x'+window[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x29d)][wUcQlCIBgZG$Jvq_PHoExfgIAt(0x172)],yekEbTDmYCFTW_$Oj=Intl[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x291)]()[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x144)]()[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x296)],unkcOOgJjMPdEGxM__sub=BAWvdgBVaTRq+'|'+ykYRmWnGt_eFr$f+'|'+hA$oPNtpmf+'|'+yekEbTDmYCFTW_$Oj,RaGeRRi$GcGsYoIMtzwiNRO=new TextEncoder(),OBSdNgGhYTTwG$CCSQrd=RaGeRRi$GcGsYoIMtzwiNRO[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x287)](unkcOOgJjMPdEGxM__sub),cAxOQOa_$ok=await crypto[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x133)][wUcQlCIBgZG$Jvq_PHoExfgIAt(0x1dd)](wUcQlCIBgZG$Jvq_PHoExfgIAt(0x2af),OBSdNgGhYTTwG$CCSQrd),IQ_oJPSyPSlTUK_fvRgF=Array[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x1e4)](new Uint8Array(cAxOQOa_$ok));return IQ_oJPSyPSlTUK_fvRgF[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x1eb)](Z_hW_FqqZ=>Z_hW_FqqZ[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x181)](parseInt(0x1715)+Math.floor(-0x136a)+-0xd*Math.trunc(parseInt(0x47)))[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x250)](-parseInt(0x20c1)+parseInt(-0x206b)+-0x135*parseInt(-0x36),'0'))[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x19a)]('');}catch(lQFNAcStwRPf){return console[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x1d9)](wUcQlCIBgZG$Jvq_PHoExfgIAt(0x111),lQFNAcStwRPf),Math[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x18e)]()[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x181)](-parseInt(0x846)+parseInt(0x1008)+parseInt(0x5)*-parseInt(0x186))[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x214)](Math.ceil(-parseInt(0x2a4))*parseFloat(-0xa)+Math.max(0x1c9,0x1c9)*parseInt(0x13)+parseInt(-0x141b)*Number(0x3),parseInt(0x1d54)+-parseInt(0xd51)+parseInt(0x1)*Math.trunc(-parseInt(0xff4)))+Math[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x18e)]()[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x181)](0x7c2+-parseInt(0x154f)+parseInt(0x2bd)*Math.floor(0x5))[wUcQlCIBgZG$Jvq_PHoExfgIAt(0x214)](Number(-parseInt(0x1))*Math.trunc(-parseInt(0x16c0))+0x21b2*-0x1+parseInt(parseInt(0xaf4)),Math.trunc(0x15d9)+-parseInt(0x259c)+-0x5*Number(-parseInt(0x32a)));}}async function generateSignature(I_giFWjLIx,O$TJkQbyqWtYHDElnRf$a,btJhwC_zW_QKPEkHtjlvXvly,upqMSxTzwM){const ODMwLYt=iYAEM,EftHvXT$i$lsY=I_giFWjLIx+'|'+O$TJkQbyqWtYHDElnRf$a+'|'+btJhwC_zW_QKPEkHtjlvXvly+'|'+upqMSxTzwM,AJZ_GMQc=new TextEncoder(),YmeushTzPWgzhAaioNCpZOxUB=AJZ_GMQc[ODMwLYt(0x287)](EftHvXT$i$lsY),pBsMdMLDpQH=await crypto[ODMwLYt(0x133)][ODMwLYt(0x1dd)](ODMwLYt(0x2af),YmeushTzPWgzhAaioNCpZOxUB),PhEEEmewSmDfFjCG$fJGwmr=Array[ODMwLYt(0x1e4)](new Uint8Array(pBsMdMLDpQH)),bA_rdM=PhEEEmewSmDfFjCG$fJGwmr[ODMwLYt(0x1eb)](V_NNdGeNn=>V_NNdGeNn[ODMwLYt(0x181)](-parseInt(0x209d)*parseFloat(-0x1)+parseInt(0x3c)*-0x36+-0x13e5)[ODMwLYt(0x250)](-0xe*-0x10b+0x24b*0x5+-parseInt(0x1a0f),'0'))[ODMwLYt(0x19a)]('');return console[ODMwLYt(0x192)](ODMwLYt(0x167),bA_rdM[ODMwLYt(0x214)](-parseInt(0x5)*Math.floor(-0x63)+-parseInt(0x19b4)+parseFloat(0x17c5),parseInt(0x1a15)+-0x8ad+-parseInt(0x115e))+ODMwLYt(0x1b7)),bA_rdM;}function generateNonce(YPojsfUCZk$$dCFdoYC=Math.floor(-0x9)*Math.floor(parseInt(0x47))+Math.floor(0xb)*Math.max(parseInt(0x139),parseInt(0x139))+-parseInt(0xae4)){const SCnnqF_U=iYAEM,seSEl_Qi_dQxZEz=SCnnqF_U(0x1ce);let l$W$mpP='';const XqHkishIbJFDQ=new Uint32Array(YPojsfUCZk$$dCFdoYC);crypto[SCnnqF_U(0x165)](XqHkishIbJFDQ);for(let kGF$A_msYzjpHsxjMSK=-0x4a*0x85+Math.max(0x223,parseInt(0x223))*-parseInt(0x8)+Math.max(0x378a,0x378a);kGF$A_msYzjpHsxjMSK<YPojsfUCZk$$dCFdoYC;kGF$A_msYzjpHsxjMSK++){l$W$mpP+=seSEl_Qi_dQxZEz[XqHkishIbJFDQ[kGF$A_msYzjpHsxjMSK]%seSEl_Qi_dQxZEz[SCnnqF_U(0x1d1)]];}return l$W$mpP;}function updateSendButton(){const lqUNjwGsDZ_X$rOmapCo=iYAEM;sendButton[lqUNjwGsDZ_X$rOmapCo(0x1ee)]=isProcessing?lqUNjwGsDZ_X$rOmapCo(0x21e):lqUNjwGsDZ_X$rOmapCo(0x226);}function showKeyInfo(){const WUBhhKvrmN$cJoW_uG=iYAEM;addMessage(WUBhhKvrmN$cJoW_uG(0x19c)+keyInfo[WUBhhKvrmN$cJoW_uG(0x1ed)]+WUBhhKvrmN$cJoW_uG(0x169)+(keyInfo[WUBhhKvrmN$cJoW_uG(0x28a)]??WUBhhKvrmN$cJoW_uG(0x20a))+WUBhhKvrmN$cJoW_uG(0x240)+formatDate(keyInfo[WUBhhKvrmN$cJoW_uG(0x20b)])+WUBhhKvrmN$cJoW_uG(0x1a7),WUBhhKvrmN$cJoW_uG(0x1c9)),setTimeout(scrollToBottom,parseInt(-parseInt(0x2274))+Math.floor(-0xde4)+Math.ceil(-0x2)*parseInt(-parseInt(0x185e)));}function formatDate(mVgcIwTkIORifALzXmkU){const fl_wF_xq=iYAEM;if(!mVgcIwTkIORifALzXmkU)return fl_wF_xq(0x20a);const OoxqxvuNUgzFoZKYxEoZN_Vvpl=new Date(mVgcIwTkIORifALzXmkU);return OoxqxvuNUgzFoZKYxEoZN_Vvpl[fl_wF_xq(0x23c)]();}function EXNHQ(){const adZAefDr=['8584858e','99828c839f','988a9d8eb89f92878ea99f85','839f9f9b98d1c4c48c829f839e89c5888486c4868a9391dad9c48c8e86828582c688838a9fc4998e878e8a988e98','989f92878e','81848285','bc8e878884868ecb9f84cbaaa2cba8838a9fcacbb2849e99cbaabba2cb808e92cbc9','c8cb1b747f7acbaabba2cba08e92cbb89f8a9f9e98e1e1c6cbc1c1a08e92cba58a868ec1c1d1cb','889e99998e859fb89f92878e','83878198','bc8e878884868ecb898a8880cacbb2849e99cbaabba2cb808e92cb838a98cb898e8e85cb9d8a87828f8a9f8e8fc5','868e98988a8c8ea8849e859f','8884859f8e859f','86848f8e8798c48c8e86828582c6dac5dec69b9984c6878a9f8e989f','808e928f849c85','bb9984888e989882858ccb92849e99cb998e9a9e8e989fc5c5c5','988899848787bf849b','cbc3889e989f8486c2','e1e1b2849e99cbaabba2cb808e92cb8298cb889e99998e859f8792cb8a889f829d8ecb8a858fcb9d8a87828f8a9f8e8fc5','be858a89878ecb9f84cb9d8e99828d92cb998e9a9e8e989f98cb998e868a828582858c','8e859f99828e98','98cb97cb','9f838e85','a2859d8a87828fcb989f92878ecb859e86898e99','b2849e99cbaabba2cb808e92cb838a98cb8e939b82998e8fcb8499cb8298cb8584cb8784858c8e99cb9d8a87828fc5cbbb878e8a988ecb8e859f8e99cb8acb858e9ccb808e92c5','ad8a82878e8fcb9f84cb88838e8880cb8d8499cb9e9b8f8a9f8e98d1','d78f829dcb88878a9898d6c99c83829f8e989b8a888ec69b998ec69c998a9bc9d5','989f92878ebf8e939f','b88e858f82858ccb998e9a9e8e989fcb9c829f83cb988e889e99829f92cb838e8a8f8e9998d1','8a989882989f8a859fc6868e98988a8c8e','cb998e9a9e8e989f98cb878e8d9f','8a899884879e9f8ecb99828c839fc6b0ddc5de998e86b6cb89849f9f8486c6d9cb9b93c6d9cb9b92c6dbc5decb9f8e939fc69398cb8d84859fc6868e8f829e86cb99849e858f8e8fc68d9e8787cb9f998a8598829f828485c6888487849998cb8f9e998a9f828485c6d9dbdbcb','ae99998499cb9e9b8f8a9f82858ccb808e92cb9e988a8c8ed1','a584cb998e9a9e8e989f98cb878e8d9f','c5c5c5','a7848c8c8e8fcb849e9fcb989e88888e98988d9e878792','998c898ac3deddc7cbdadddac7cbdadbdec7cbdbc5d3c2','e1cbcbcbcbcbcbcbcbcbcbd7989d8ccb88878a9898d6c988849b92c682888485c9cb9386878598d6c9839f9f9bd1c4c49c9c9cc59cd8c584998cc4d9dbdbdbc4989d8cc9cb9d828e9ca98493d6c9dbcbdbcbd9dfcbd9dfc9cb8d828787d6c98584858ec9cb989f9984808ed6c9889e99998e859fa884878499c9cb989f9984808ec69c828f9f83d6c9d9c9cb989f9984808ec68782858e888a9bd6c999849e858fc9cb989f9984808ec68782858e81848285d6c999849e858fc9d5e1cbcbcbcbcbcbcbcbcbcbcbcbd79b8487928782858ecb9b8482859f98d6c9d9dbcbddcbd2cbdadccbdfcbdad9c9d5d7c49b8487928782858ed5e1cbcbcbcbcbcbcbcbcbcbd7c4989d8cd5e1cbcbcbcbcbcbcbcbcbcbd7989b8a85cb88878a9898d6c988849b92c69f8e939fc9d5a8849b828e8fcad7c4989b8a85d5e1cbcbcbcbcbcbcbcb','cbc1c1096d7bcba8beb9b9aea5bfc1c1','868285b89e9b9b84999f8e8fbd8e9998828485','b2849e99cbaabba2cb808e92cb838a98cb8584cb998e9a9e8e989f98cb998e868a828582858ccb8499cb9e988a8c8ecb82858d84cb8298cb9e858a9d8a82878a89878ec5','bb878e8a988ecb989b8e88828d92cb8acb9d8a87828fcb989f92878ecb859e86898e99d1cb','9f8e939fc682858f828c84c6d8dbdb','ae859f8e99','878a858c9e8a8c8e','097778cba6848f8e87cb88838a858c8e8fe1e1ad998486d1cb','af8e9f8a82878e8f','849b8e85','8a8f8f','988899848787a38e828c839f','9b8498829f828485','c9cb88878a9898d6c9878a858c9e8a8c8ec6','9892989f8e86','aabba2cb808e92cb9d8a87828f8a9f8e8fcb989e88888e98988d9e878792','88878a9898a782989f','9f849b','a88a8585849fcb8e8f829fcb8f8e8d8a9e879fcb989f92878e98','aaa9a8afaeadaca3a2a1a0a7a6a5a4bbbab9b8bfbebdbcb3b2b18a89888f8e8d8c83828180878685849b9a99989f9e9d9c939291dbdad9d8dfdedddcd3d2','9a9e8e9992b88e878e889f8499','ac8e86828582cbd9c5dbcbad878a9883cbbf8382858082858ccbae939b8e9982868e859f8a87','878e858c9f83','989e88888e9898','c8cb1b747871cbaaa2cbaa989882989f8a859fcba38e879bcba68e859ee1e1c8c8cbaa9d8a82878a89878ecba88486868a858f98e1c6cbc1c1c6838e879bc1c1d1cbb883849ccb9f838298cb838e879bcb868e859ee1c6cbc1c1c686848f8e87cbb0859e86898e99b6c1c1d1cba8838a858c8ecbaaa2cb86848f8e87e1c6cbc1c1c6989f92878ecbb0859e86898e99b6c1c1d1cba8838a858c8ecb9f84cb859e86898e998e8fcb989f92878ee1c6cbc1c1c6989f92878ecbc99f8e939fc9c1c1d1cbaa8f8fcb858e9ccb889e989f8486cb989f92878ecb9c829f83cb9b9984869b9fcb9f8e939fe1c6cbc1c1c6989f92878ecbc68fcbb0859e86898e99b6c1c1d1cbaf8e878e9f8ecb889e989f8486cb989f92878ecb8992cb859e86898e99e1c6cbc1c1c688878e8a99c1c1d1cba8878e8a99cb88838a9fcb8382989f849992cb8a858fcb868e86849992e1c6cbc1c1c6989f8a9f9e98c1c1d1cbb883849ccbaabba2cb808e92cb989f8a9f9e98cb8a858fcb9e988a8c8ee1c6cbc1c1c69d8e9998828485c1c1d1cbb883849ccb8a9b9bcb9d8e9998828485cb82858d8499868a9f828485e1c6cbc1c1c69e9b8f8a9f8ec1c1d1cba8838e8880cb8d8499cb8a9b9bcb9e9b8f8a9f8e98e1c6cbc1c1c687848c849e9fc1c1d1cbb98e86849d8ecbaabba2cb808e92cb8a858fcb87848c849e9fe1e1c8c8cb1b744f7dcbaa9d8a82878a89878ecba6848f8e8798e1','89848f92','9b8a999f98','9bc6dfcb8689c6d8cb','9f84a7849c8e99a88a988e','998e86849d8ea88382878f','8e99998499','86848f8e87','b88e889e99829f92cb8e99998499d1','d9d3deddd2dbd3a4ae9282a69a','8f828c8e989f','988782888e','9f848a989fa884859f8a82858e99','8a8582868a9f8ec69b9e87988e','ad8a82878e8fcb9f84cb88849b92cb88848f8ed1','81988485','8c8e9faa9f9f9982899e9f8e','8d998486','9892989f8e86c6868e98988a8c8e','8a9b82a08e92ad849986','8f8a9f8ac69f8a998c8e9f','888a85888e87b89f92878ea99f85','839f9f9b98d1c4c49e828e939b8d93848785828d9b818184989e8798c5989e9b8a898a988ec58884','988e9f9f82858c98a99f85','868a9b','d788848f8ecb88878a9898d6c9898cc68c998a92c6d3dbdbcb9b93c6dacb9b92c6dbc5decb99849e858f8e8fcb9f8e939fc69b828580c6dfdbdbc9d5cfdad7c488848f8ed5','858a868e','8285858e99a3bfa6a7','828588879e8f8e98','988e858fa99e9f9f8485','e1c1c1be9b8f8a9f8ecb8a9d8a82878a89878ed1c1c1cb','888784988e989f','aabba2cb8e99998499d1','8d9e85889f828485','9b93c6dfcb9b92c6d9cb99849e858f8e8fc6868fcb98838a8f849cc6878ccb8d878e93cb829f8e8698c6888e859f8e99cb989b8a888ec693c6d9cb9f998a8598829f828485c68a8787cb8f9e998a9f828485c6dedbdbcb','b892989f8e86','9b8a998e859fa5848f8e','9f8e939fc689879e8ec6d8dbdb','ccc2c9b6','868e98988a8c8e98','858e9cb89f92878ea99f85','9f8e939fa884859f8e859f','aabba2cb808e92cb9d8a87828f8a9f8e8f','87848c849e9f','998e9882918e','d78f829dcb88878a9898d6c988848f8ec68987848880c68884859f8a82858e99c9d5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbd78f829dcb88878a9898d6c988848f8ec68987848880c6838e8a8f8e99c9d5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbd7989b8a85cb88878a9898d6c9878a858c9e8a8c8ec6878a898e87c9d5','b89f92878ecbc8','d7989b8a85cb88878a9898d6c98a8582868a9f8ec69b9e87988ec9d5096b49d7c4989b8a85d5cbbe9b8f8a9f8ecbaa9d8a82878a89878e','898a88808c99849e858fa884878499','88878e8a99a382989f849992a99f85','868a93a8838a9998','9c99829f8ebf8e939f','84858887828880','8c8e9fb4808e92b4989f8a9f9e98','d8a187b2bab9aa','be858085849c85','8e939b82998e98aa9f','d7c4989b8a85d5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbd7899e9f9f8485cb84858887828880d6c988849b92a8848f8ec3cc','a2859d8a87828fcbaabba2cb808e92','838e879b','b2849ecb8a998ecb8acb838e879b8d9e87c7cb838a9986878e9898c7cb8a858fcb8384858e989fcb8a989882989f8a859fcb9c8384cb8a85989c8e9998cb9e988e99cb9a9e8e989f82848598cb8f82998e889f8792cb8a858fcb8a88889e998a9f8e8792c5','d78999d5','9d8e9998828485','d783dacb88878a9898d6c99f8e939fc6d99387cb8d84859fc68984878fcb9f8e939fc69c83829f8ecb869fc6dfcb8689c6d9c9d5cfdad7c483dad5','88838a9fad849986','989e89989f9982858c','82859d8a87828fcbaabba2cb808e92','86848f8e87b88e878e889f','8e8f829fb89f92878ea99f85','ac8e86828582cbdac5decbad878a9883cba78a9f8e989f','bb878e8a988ecb8e859f8e99cb8a85cbaabba2cb808e92','86848f8e8798c48c8e86828582c6d9c5dbc69b9984c68e939b','9f8e939fc684998a858c8ec6dadbdb','cd8c9fd0','a78e8a9985a7a6cbdac5decbbb9984cbae939b8e9982868e859f8a87','d7989d8ccb88878a9898d6c99cc6ddcb83c6ddcb8a8582868a9f8ec6989b8285c9cb8d828787d6c98584858ec9cb989f9984808ed6c9889e99998e859fa884878499c9cb9d828e9ca98493d6c9dbcbdbcbd9dfcbd9dfc9d5d79b8a9f83cb989f9984808ec68782858e888a9bd6c999849e858fc9cb989f9984808ec68782858e81848285d6c999849e858fc9cb989f9984808ec69c828f9f83d6c9d9c9cb8fd6c9a6dfcbdf9dde83c5ded3d986dadec5d8deddcbd9aad3c5dbdbdacbd3c5dbdbdacbdbcbdbdbdfc5ded3d9cbd286dbcbdba3d286dadacbdada9dc6de83c6c5ded3da86dbcbdb8ad3c5dbdbd8cbd3c5dbdbd8cbdbcbdbdac6dadec5d8dedcc6d986dadec5d8dedccbd9a3dadec9c4d5d7c4989d8cd5','868e98988a8c8e','9d8a99c3c6c69e9b8f8a9f8ec685849f828d82888a9f828485c699828c839fc2','8a9b9b8e858fa88382878f','ad8a82878e8fcb9f84cb9d8a87828f8a9f8ecbaabba2cb808e92','8887829b89848a998f','86848f8e8798c48c8e86828582c6d9c5dbc68d878a9883c69f8382858082858cc68e939bc6dad9dad2','9f8e939fc689879e8ec6dadbdb','d7989d8ccb88878a9898d6c99cc6ddcb83c6ddc9cb8d828787d6c98584858ec9cb989f9984808ed6c9889e99998e859fa884878499c9cb9d828e9ca98493d6c9dbcbdbcbd9dfcbd9dfc9d5d79b8a9f83cb989f9984808ec68782858e888a9bd6c999849e858fc9cb989f9984808ec68782858e81848285d6c999849e858fc9cb989f9984808ec69c828f9f83d6c9d9c9cb8fd6c9a6dad9cbdad287d2cbd9c6d2c6dad3c6d2cbdad3cbd2c6d99186dbcbdb9dc6d3c9c4d5d7c4989d8cd5','ac8e86828582cbd9c5decbbb9984cbae939b8e9982868e859f8a87cbdbd8c6d9de','ae99998499d1cb','9b9e87988ebf83998e988384878f','8c8e9fae878e868e859fa992a28f','d7c49e87d5','ad8a82878e8fcb9f84cb988a9d8ecb889e989f8486cb989f92878e98','998e9b878a888e','d78f829dcb88878a9898d6c98d878e93cb829f8e8698c6888e859f8e99cb8689c6dac9d5e1cbcbcbcbd7989b8a85cb88878a9898d6c99f8e939fc69398cb8d84859fc6868e8f829e86cb','8887828880','8d878e93','8485989e8986829f','b2849ecb8a998ecb8acb8884858882988ecb8a989882989f8a859fc5cba08e8e9bcb8a85989c8e9998cb8999828e8dcb8a858fcb9f84cb9f838ecb9b8482859fc5','aabba2cb808e92cb85849fcb9d8a87828f','9f848a989fc682858d84','bd8a87828f8a9f828485cb8e99998499d1','8884878499b888838e868e','998e9b878a888ea88382878f','d7c48487d5','868a9f8883','8d82938e8f','9e988e99aa8c8e859f','9f84a784888a878eb89f9982858c','d99bbfa0a9928c','8d82938e8fcb898cc68c998a8f828e859fc69f84c699cb8d998486c689879e8ec6dddbdbcb9f84c682858f828c84c6dddbdbcb83849d8e99d18d998486c689879e8ec6dedbdbcb83849d8e99d19f84c682858f828c84c6dedbdbcb9f8e939fc69c83829f8ecb9f8e939fc69886cb9b92c6dacb9b93c6d8cb99849e858f8e8fc68d9e8787cb98838a8f849ccb9f998a8598829f828485c68a8787cb8f9e998a9f828485c6d9dbdb','9e988e99c6868e98988a8c8e','e1c6cbc1c1ae939b82998e98cbaa9fc1c1d1cb','bf838298cb9d8e9998828485cb8298cb8584cb8784858c8e99cb989e9b9b84999f8e8fc5cbbb878e8a988ecb9e9b8f8a9f8ecb9f84cb8884859f82859e8ecb9e9882858ccb9f838ecb8a9b9bc5','d78e86cb88878a9898d6c99f8e939fc68c998a92c6d8dbdbcb829f8a878288c9d5cfdad7c48e86d5','dac5dbc5df','8a9b82a08e92a2859b9e9f','849b9f828485','aabba2cba08e92','d79e87cb88878a9898d6c98692c6d9cb8782989fc68f829888c9d5','8d8499ae8a8883','9d8a87828f','83828f8f8e85','d783d9cb88878a9898d6c99f8e939fc69387cb8d84859fc68984878fcb9f8e939fc68c998a92c6dadbdbcb869fc6dfcb8689c6d9c9d5cfdad7c483d9d5','9b878a82859f8e939f','d7c48f829dd5','cb8a8f8f8e8fd1cbc9','87848c849e9fa99f85','9b8a8fb89f8a999f','d7989f9984858ccb88878a9898d6c99f8e939fc69c83829f8ec9d5cfdad7c4989f9984858cd5','989e8986829f','d7c49bd5e1cbcbcbcbcbcbcbcbd78f829dcb88878a9898d6c9989b8a888ec692c6d8c9d5e1cbcbcbcbcbcbcbcbcbcb','dfd8dbd9dfde898d85af8598','be858085849c85cb888486868a858fd1cb','d8db99a7b9a6a58e','989f92878eb88e878e889f','899e9f9f8485','e1c6cbc1c1b98e9a9e8e989f98cba78e8d9fc1c1d1cb','b49d8e9998828485a2858d84','9984878e','aabba2cb998e9a9e8e989fcb8d8a82878e8f','8a9b9b8782888a9f828485c481988485','a8848f8ecb88849b828e8fcb9f84cb8887829b89848a998f','e1e1c8c8cb1b746543cbaa9d8a82878a89878ecbb89f92878e98e1','c8cb1b747f6fcbbe9b8f8a9f8ecbaa9d8a82878a89878ee1e1aacb858e9ccb9d8e9998828485cbc39d','9e9b8f8a9f8ebe9987','cb9e9b8f8a9f8e8f','a2cb9e858f8e99989f8a858fc5','a884858882988e','ac8e86868acbd8cbd9dca9','85849c','cd879fd0','a2859d8a87828fcb86848f8e87cb859e86898e99','989f9982858c828d92','c2cb848dcb9f838298cb8a9b9bcb8298cb8a9d8a82878a89878ecb9c829f83cb858e9ccb8d8e8a9f9e998e98cb8a858fcb8d82938e98c5e1e1c1c1a89e99998e859fcb9d8e9998828485d1c1c1cb','e1cbcbcbcbd7c48f829dd5','889e99998e859fa8838a9998','b89c829f88838e8fcb9f84cb','86848f8e8798c48c8e86828582c6d9c5dec69b9984c68e939bc6dbd8c6d9de','989f92878ead849986','9e9b8f8a9f8eb4808e92b49e988a8c8e','c588849b92c688848f8ec6899f85','8f82989b878a92','e1cbcbcbcbcbcbcbcbcbcbd79bcb88878a9898d6c99f8e939fc68c998a92c6dfdbdbcb9f8e939fc69886c9d5e1cbcbcbcbcbcbcbcbcbcbcbcba28dcb92849ecb998e888e829d8e8fcb9f838298cb8d82878ecb8d998486cb9884868e84858ec7cb8a9880cb9f838e86cb8d8499cb9f838ecb878a9f8e989fcb9d8e9998828485c5e1cbcbcbcbcbcbcbcbcbcbd7c49bd5e1cbcbcbcbcbcbcbcbd7c48f829dd5e1cbcbcbcbcbcbd7c48f829dd5e1cbcbcbcbd7c48f829dd5e1cbcb','bb878e8a988ecb989b8e88828d92cb8acb989f92878ecb859e86898e99cb9f84cb8f8e878e9f8ec5','9b998e9d8e859faf8e8d8a9e879f','9f8e939fc6998e8fc6d8dbdb','cb8a8f8f8e8f','d7c4989b8a85d5e1cbcb','cbc3be9b8f8a9f8ecb8a9d8a82878a89878ec2','d9ddd2ded3d3d28993adbaafa3','bf838298cb9d8e9998828485cb8298cb8584cb8784858c8e99cb989e9b9b84999f8e8fc5cbbb878e8a988ecb9e9b8f8a9f8ecb9f84cb8884859f82859e8ec5','989b87829f','dedfded2d2d3d9bc8a8ebaa7a9','898cc689879e8ec6d3dbdb','d7c49bd5e1cbcbcbcbcbcbcbcbd79bcb88878a9898d6c99f8e939fc68c998a92c6d8dbdbcb8689c6dfcb9f8e939fc69886c9d5a89e99998e859fcb9d8e9998828485d1cb','9c828f9f83','9f848a989fc68e99998499','e1cbcbcbcbcbcbcbcbcbcbcbcbd78acb83998e8dd6c9','e1cbcbcbcbd7989d8ccb88878a9898d6c99cc6dfcb83c6dfcb8d878e93c6988399828580c6dbc9cb8d828787d6c98584858ec9cb989f9984808ed6c9889e99998e859fa884878499c9cb9d828e9ca98493d6c9dbcbdbcbd9dfcbd9dfc9d5e1cbcbcbcbcbcbd79b8a9f83cb989f9984808ec68782858e888a9bd6c999849e858fc9cb989f9984808ec68782858e81848285d6c999849e858fc9cb989f9984808ec69c828f9f83d6c9d9c9cb8fd6c9a6dad8cbdadd83c6da9dc6df83c6da86dac6df83c5dbdaa6d9dacbdad98ad2cbd2cbdbcbdadac6dad3cbdbcbd2cbd2cbdbcbdbdadad3cbdb91c9c4d5e1cbcbcbcbd7c4989d8cd5e1cbcbcbcbd7989b8a85d5','9d8a87828f8a9f8eb48a9b82b4808e92','868a93','c2e1c6cbc1c1b89f92878ec1c1d1cb','8e8588848f8e','e1c1c1be9b8f8a9f8ecb998e9a9e82998e8fd1c1c1cb','d7c4989b8a85d5e1cbcbd7c48f829dd5','998e9a9e8e989f98b98e868a828582858c','9b9e9883','808e92b89f8a9f9e98','898cc68c998a92c6dcdbdb','8e939b82998e98b48a9f','8e938e88a88486868a858f','b2849e','af8a9f8ebf82868ead8499868a9f','be9b8f8a9f8ecb998e9a9e82998e8fcb9f84cb9e988ecb9f838298cb8a9b9b','ac8e86828582cbd9c5dbcbad878a9883','097778cbb89f92878ecb88838a858c8e8fe1e1ad998486d1cb','838e879ba99f85','9f82868eb184858e','878a9f8e989fbd8e9998828485','ac8e86828582cbdac5decbbb9984cba78a9f8e989f','c8cb1b747143cba2a6bba4b9bfaaa5bfd1cba3a4bccbbfa4cbbeb8aecbbfa3a2b8cbaabbbbcb1b747143e1e1c8c8cbbf9c84cbbc8a9298cb9f84cba884859f998487cb9f838ecbaa9b9bd1e1e1c8c8c8cbda045364096848cbacbea2cba6848f8ecbc3b98e888486868e858f8e8fc2e1c6cbc1c1a887828880cb9f838ecb097172045364cb988e9f9f82858c98cb82888485c1c1cb8285cb9f838ecb9f849bcb878e8d9fcb888499858e99cb9f84cb8a88888e9898cb8a8787cb8884859f99848798e1c6cba8838a858c8ecb86848f8e8798c7cb989f92878e98c7cb8a858fcb868a858a8c8ecb8382989f849992cb9c829f83cb899e9f9f848598cb8a858fcb8f99849b8f849c8598e1c6cba584cb858e8e8fcb9f84cb998e868e86898e99cb888486868a858f98cae1e1c8c8c8cbd9045364096848cba88486868a858fcba6848f8ecbc3aa8f9d8a85888e8fc2e1c6cbbf929b8ecb8bc6838e879b8bcb8285cb9f838ecb88838a9fcb9f84cb988e8ecb8a8787cb8a9d8a82878a89878ecb888486868a858f98e1c6cba499cb8887828880cb9f838ecb097678cb9a9e8e989f828485cb868a9980cb899e9f9f8485cb858e939fcb9f84cb9f838ecb82859b9e9fcb8d828e878fe1e1a8838484988ecb9c838288838e9d8e99cb868e9f83848fcb9c84998098cb898e989fcb8d8499cb92849eca','c9cb838a98cb898e8e85cb9d8a87828f8a9f8e8fc5','a2859d8a87828fcb989f92878ecb859e86898e99c5cba8838484988ecb8d998486d1cb','b89f92878ecb9f8e939fcb888a8585849fcb898ecb8e869b9f92','9888998e8e85','9d8a99c3c6c69e9b8f8a9f8ec685849f828d82888a9f828485c69f849bc2','be9b8f8a9f8ecb8a9d8a82878a89878ecacbc39d','ae99998499cb88838e888082858ccbaabba2cb808e92cb989f8a9f9e98','88878e8a99','cbc3c8','86848f8e8798c48c8e86868ac6d8c6d9dc89c6829f','8a9b9bbd8e9998828485af82989b878a92','9f8e939fc689879e8ec6dfdbdb','9e9b8f8a9f8ea99f85','ad8a82878e8fcb9f84cb88849b92cb9f8e939fd1cb','88838a99a8849e859f8e99','a8838a9fcb8382989f849992cb88878e8a998e8f','988e9fa29f8e86','899e9f9f8485b084858887828880d6c988849b92a8848f8ec3cc','cb8f8e878e9f8e8f','dadbdcd3ddd3db988a9c85aaa7','ae99998499','b8a3aac6d9dedd','888784988eb88e9f9f82858c98a99f85','808e92','e1e1b2849ecb888a85cb8884859f82859e8ecb9e9882858ccb9f838298cb9d8e9998828485c7cb899e9fcb9e9b8f8a9f82858ccb8298cb998e888486868e858f8e8fcb8d8499cb9f838ecb898e989fcb8e939b8e99828e85888ec5e1e1aa9880cb9f838ecb9b8e99988485cb9c8384cb98838a998e8fcb9f838298cb8d82878ecb9c829f83cb92849ecb8d8499cb9f838ecb878a9f8e989fcb9d8e9998828485c5','988e878e889f','9e9b8f8a9f8e','88998e8a9f8ea887828e859f','998e86849d8ea29f8e86','9a9e8e9992b88e878e889f8499aa8787','b89f92878ecb9f8e939fcb888a8585849fcb898ecb8e869b9f92c5','83828c83','86848f8e8798c48c8e86828582c6d9c5dbc68d878a9883','ae99998499cb8c8e858e998a9f82858ccb8f8e9d82888ecba2afd1','c2cb8f8e878e9f8e8fc5','88849b92','e1c6cbc1c1bd8e9998828485c1c1d1cb','a88a8585849fcb8f8e878e9f8ecb8f8e8d8a9e879fcb989f92878e','cb85849fcb8d849e858f','9b998ecb88848f8e','9f848a989fc6989e88888e9898','e1cbcbcbcbd78f829dcb88878a9898d6c98d82938e8fcb8285988e9fc6dbcb898cc68c998a92c6d2dbdbcb8d878e93cb8d878e93c6888487cb829f8e8698c6888e859f8e99cb819e989f828d92c6888e859f8e99cb9bc6dfcb9f8e939fc6888e859f8e99c9d5e1cbcbcbcbcbcbd78f829dcb88878a9898d6c9898cc6998e8fc6d3dbdbcb99849e858f8e8fc6878ccb9bc6ddcb868a93c69cc6868fcb8693c68a9e9f84cb98838a8f849cc69387c9d5e1cbcbcbcbcbcbcbcbd783dacb88878a9898d6c99f8e939fc69387cb8d84859fc68984878fcb9f8e939fc69c83829f8ecb8689c6dfc9d509714b045364cbbe9b8f8a9f8ecbb98e9a9e82998e8fd7c483dad5e1cbcbcbcbcbcbcbcbd79bcb88878a9898d6c99f8e939fc69c83829f8ecb8689c6ddc9d5','88878a9898a58a868e','989f8a9f9e98','c5cbbe988ecbc6838e879bcb9f84cb988e8ecb8a9d8a82878a89878ecb888486868a858f98c5','9b8a99988e','858499868a87','8a9b82a08e92a6848f8a87','9f8e939fc6998e8fc6dfdbdb','a89e989f8486cb','9d8a879e8e','888784858ea5848f8e','988e9f9f82858c98bb8a858e87','9f84ad82938e8f','8e92a18389ac8882a482a1a2be91a2daa582a298a285b9de88a8a2dda2809bb3bda8a1d2c58e92a19b88d8a682a482a1918fb3a983b286ad91b1b8a298a285a187b182a2dda285bd9bb1b3839cb185839d89acde9bb185a99a8a86d2918fbc9391a2829c828886d298b1b8a2dda286ad9e89d9df82a7a8a19bb2b3ba82a481aed8a5afa693a681a29ca6afba98a286bddf88a8a2dda681aadaa4afb2dea4afaa9ca5a3dbc59fda9f9e89c6b4b382bddea2a984baa48f8aa7a0b18f8d8285ac80a3acaa81b1a1b2a4dfbda9b3a893a8db','808e9298','e1e1c8c8cb097172045364cba89e99998e859fcbb88e9f9f82858c98e1c6cbc1c1a6848f8e87c1c1d1cb','8a989882989f8a859f','87849c','e1e1b2849ecb888a85cb9e988ecb8bc69e9b8f8a9f8e8bcb9f84cb88838e8880cb8d8499cb9e9b8f8a9f8e98cb868a859e8a878792c5','c9cb88878a9898d6c98987848880cb9cc68d9e8787cb898cc689879e8ec6dddbdbcb83849d8e99d1898cc689879e8ec6dcdbdbcb9f8e939fc69c83829f8ecb9b92c6d9cb9b93c6dfcb99849e858f8e8fc9d5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbaf849c8587848a8fcba78a9f8e989fcbbd8e9998828485e1cbcbcbcbcbcbcbcbcbcbcbcbd7c48ad5e1cbcbcbcbcbcbcbcbcbcb','e1e1a5849f8ed1cba884859d8e99988a9f828485cb868e86849992cb838a98cb898e8e85cb998e988e9fcb8d8499cb9f838ecb858e9ccb86848f8e87c5','898cc6998e8fc6d3dbdb','8a8f8fae9d8e859fa782989f8e858e99','9d8e9998828485a2858d84a99f85','cd9a9e849fd0','88998e8a9f8eae878e868e859f','989e899f878e','9f998286','dfdddadbd2dc838ebd8a9c9b','998e9a9e8e989f98b4998e868a828582858c','b98e8c9e878a99','82858d84','ccc2c9cb88878a9898d6c988849b92c6899e9f9f8485c9d5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbd7989d8ccb9386878598d6c9839f9f9bd1c4c49c9c9cc59cd8c584998cc4d9dbdbdbc4989d8cc9cb9d828e9ca98493d6c9dbcbdbcbd9dfcbd9dfc9cb8d828787d6c98584858ec9cb989f9984808ed6c9889e99998e859fa884878499c9cb989f9984808ec69c828f9f83d6c9d9c9cb989f9984808ec68782858e888a9bd6c999849e858fc9cb989f9984808ec68782858e81848285d6c999849e858fc9d5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbd7998e889fcb93d6c9d2c9cb92d6c9d2c9cb9c828f9f83d6c9dad8c9cb838e828c839fd6c9dad8c9cb9993d6c9d9c9cb9992d6c9d9c9d5d7c4998e889fd5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbd79b8a9f83cb8fd6c9a6decbdadea3df8ad9cbd9cbdbcbdbcbdac6d9c6d9bddf8ad9cbd9cbdbcbdbcbdacbd9c6d983d28ad9cbd9cbdbcbdbcbdacbd9cbd99ddac9d5d7c49b8a9f83d5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbd7c4989d8cd5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcba8849b92e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbd7c4899e9f9f8485d5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbd7c48f829dd5e1cbcbcbcbcbcbcbcbcbcbcbcbcbcbd79b998ed5d788848f8ecb828fd6c9','888a9f8883','e1bf84d1cb','888a858f828f8a9f8e98','839f9f9b98d1c4c4998a858f84869b9984818e889f98c58485998e858f8e99c5888486c49d8e9998828485c688838e8880','868e98988a8c8ea2859b9e9f','b98e989b8485988ecb998e888e829d8e8fcb8285cb','d7c488848f8ed5d7c49b998ed5e1cbcbcbcbcbcbcbcbcbcbcbcbd7c48f829dd5','aa9e9f838e859f82888a9f828485cb8e99998499d1cb','898cc684998a858c8ec6d3dbdb','ad8a82878e8fcb9f84cb88849b92cb88848f8e','998e9884879d8e8fa49b9f82848598','b89f84998e8fcbaabba2cb808e92cb8298cb82859d8a87828f','bba4b8bf','dadfd9d9d2d9939dbf8e8f82','d78f829dcb88878a9898d6c9869fc6d9cb9f8e939fc69398cb9f8e939fc68c998a92c6dfdbdbcb8d878e93cb829f8e8698c6888e859f8e99c9d5e1cbcbcbcbcbcbd7989d8ccb88878a9898d6c99cc6d8cb83c6d8cb8699c6dac9cb8d828787d6c98584858ec9cb989f9984808ed6c9889e99998e859fa884878499c9cb9d828e9ca98493d6c9dbcbdbcbd9dfcbd9dfc9d5e1cbcbcbcbcbcbcbcbd79b8a9f83cb989f9984808ec68782858e888a9bd6c999849e858fc9cb989f9984808ec68782858e81848285d6c999849e858fc9cb989f9984808ec69c828f9f83d6c9d9c9cb8fd6c9a6dad9cbd39ddf87d8cbd886ddc6d88ad2cbd2cbdbcbdadac6dad3cbdbcbd2cbd2cbdbcbdbdadad3cbdb91c9cbc4d5e1cbcbcbcbcbcbd7c4989d8cd5e1cbcbcbcbcbcb','dedd9fb8ba9db193','82859b9e9f','868e8f829e86','a584cb998e989b8485988e','ae99998499cb87848a8f82858ccb889e989f8486cb989f92878e98d1','988e9faa9f9f9982899e9f8e','9f8e939f','ae99998499cb988a9d82858ccb889e989f8486cb989f92878e98d1','8a9b82a08e92','d783d8cb88878a9898d6c99f8e939fc6878ccb8d84859fc68984878fcb9f8e939fc68c998a92c6d9dbdbcb869fc6dfcb8689c6d9c9d5cfdad7c483d8d5','ae99998499cb9d8a87828f8a9f82858ccbaabba2cb808e92','9c8a998582858cbf83998e988384878f98','a2859d8a87828fcb989f92878ecb8d8499868a9fc5cbbe988ed1cbc6989f92878ecbc9b2849e99cb889e989f8486cb989f92878ecb9f8e939fcb838e998ec9','889e99998e859fbd8e9998828485','859e86898e99','9883828d9fa08e92','bb878e8a988ecb989b8e88828d92cb8acb9d8a87828fcb86848f8e87cb859e86898e99d1cb','be988a8c8ecb9e858085849c85','9f8a998c8e9f','8c8e9fa29f8e86','ae99998499cb88838e888082858ccb808e92cb989f8a9f9e98d1','8a9b82a08e92ae99998499','86848f8e8798c48c8e86828582c6dac5dec68d878a9883c6878a9f8e989f','9e9b8f8a9f8eb98e888486868e858f8e8f','d78782cb88878a9898d6c98687c6dfc9d5096b49cbcfdad7c48782d5','1b747860cba8838a9fcb8382989f849992cb8a858fcb868e86849992cb88878e8a998e8f','a2859d8a87828fcb86848f8e87cb859e86898e99c5cba8838484988ecb8d998486d1cb','aabba2cb808e92cb838a98cb8e939b82998e8f','8c8e9fb98a858f8486bd8a879e8e98','ae99998499cb9d8a87828f8a9f82858ccb989f84998e8fcb808e92d1','a887828e859fcb8c8e858e998a9f8e8fcb98828c858a9f9e998ecbc38d8299989fcbdadbcb88838a9998c2d1','c2e1c6cbc1c1a68e98988a8c8e98c1c1d1cb','e1c6cbc1c1b98e9a9e8e989f98cbb98e868a828582858cc1c1d1cb','d78782cb88878a9898d6c98687c6ddc9d5cfdad7c48782d5','9e9b8f8a9f8eb98e9a9e82998e8f','88848f8ec6','8f8e878e9f8eb89f92878ea99f85','8f829d','889e989f8486b89f92878e98','9f8e939fc6998e8fc6dadbdb','cdc8d8d2d0','838e828c839f','868a93878e858c9f83','86848f8e8798c4878e8a99858786c6dac5dec69b9984c68e939b8e9982868e859f8a87','88838a858c8e','b2849ecb8a998ecb8acb8f8e9f8a82878e8fcb8a989882989f8a859fc5cbbb99849d828f8ecb8285c68f8e9b9f83cb8e939b878a858a9f82848598cb9c829f83cb8e938a869b878e98c5','b89f92878ecb88838a858c8e8fcb9f84cb','c2cb8f8e878e9f8e8fc5cbb98e9d8e999f8e8fcb9f84cbb98e8c9e878a99cb989f92878ec5','e1cbcbcbcbcbcbcbcbd7989d8ccb9386878598d6c9839f9f9bd1c4c49c9c9cc59cd8c584998cc4d9dbdbdbc4989d8cc9cb9d828e9ca98493d6c9dbcbdbcbd9dfcbd9dfc9cb8d828787d6c98584858ec9cb989f9984808ed6c9889e99998e859fa884878499c9cb989f9984808ec69c828f9f83d6c9d9c9cb989f9984808ec68782858e888a9bd6c999849e858fc9cb989f9984808ec68782858e81848285d6c999849e858fc9d5e1cbcbcbcbcbcbcbcbcbcbd79b8487928782858ecb9b8482859f98d6c9d9dbcbddcbd2cbdadccbdfcbdad9c9d5d7c49b8487928782858ed5e1cbcbcbcbcbcbcbcbd7c4989d8cd5e1cbcbcbcbcbcbcbcba8849b828e8fcae1cbcbcbcbcbcb','9e988e99','898cc6998e8fc6d2dbdbc4d3dbcb9f8e939fc6998e8fc6dadbdbcb99849e858f8e8fc6878c','c8cb1b74785acbaa9b9bcbbd8e9998828485cba2858d8499868a9f828485e1e1c1c1a89e99998e859fcb9d8e9998828485d1c1c1cb','988e878e889f8e8f','a89e989f8486cb989f92878ecbc8','88878e8a99a99f85','d78487cb88878a9898d6c98692c6d9cb8782989fc68f8e8882868a87c9d5','9f84b89f9982858c','cd8a869bd0','b28e98','889e99998e859fa6848f8e87','849b8a88829f92c6db','a78488aaa2','9f8e939f8a998e8a','ac8e86828582cbd9c5dbcbbb9984cbae939b8e9982868e859f8a87','839f9f9b98d1c4c49e828e939b8d93848785828d9b818184989e8798c5989e9b8a898a988ec58884c48d9e85889f82848598c49ddac48c8e86828582c69b99849392','9f8e939fc68c998a92c6dfdbdb','808e92b89f8a9f9e98a99f85','9f8e939fc688928a85c6d8dbdb','097778cba89e989f8486cb989f92878ecbc8','998a858f8486','88838a9fa2859f8e998d8a888e','83828c8387828c839fae878e868e859f','998e86849d8e','87848c','989f8a999f98bc829f83','999b88'];EXNHQ=function(){return adZAefDr;};return EXNHQ();}async function checkKeyStatus(){const EpLZmqneRKydBBlQipu=iYAEM;try{const {data:b_vL_rg,error:fAbIIEJmTwRVuub_GT}=await supabaseClient[EpLZmqneRKydBBlQipu(0x194)](EpLZmqneRKydBBlQipu(0x208),{'p_key':validatedApiKey,'p_device_id':deviceId});if(fAbIIEJmTwRVuub_GT)return console[EpLZmqneRKydBBlQipu(0x1d9)](EpLZmqneRKydBBlQipu(0x15d),fAbIIEJmTwRVuub_GT),showToast(EpLZmqneRKydBBlQipu(0x2a0),EpLZmqneRKydBBlQipu(0x1d9)),![];if(!b_vL_rg||!b_vL_rg[EpLZmqneRKydBBlQipu(0x249)])return localStorage[EpLZmqneRKydBBlQipu(0x2b6)](EpLZmqneRKydBBlQipu(0x151)),validatedApiKey=null,apiKeyModal[EpLZmqneRKydBBlQipu(0x199)][EpLZmqneRKydBBlQipu(0x272)]=EpLZmqneRKydBBlQipu(0x230),chatInterface[EpLZmqneRKydBBlQipu(0x199)][EpLZmqneRKydBBlQipu(0x272)]=EpLZmqneRKydBBlQipu(0x195),apiKeyError[EpLZmqneRKydBBlQipu(0x1fc)]=EpLZmqneRKydBBlQipu(0x1ad),apiKeyError[EpLZmqneRKydBBlQipu(0x1cb)][EpLZmqneRKydBBlQipu(0x191)](EpLZmqneRKydBBlQipu(0x24a)),showToast(EpLZmqneRKydBBlQipu(0x164),EpLZmqneRKydBBlQipu(0x1d9)),![];return keyInfo[EpLZmqneRKydBBlQipu(0x28a)]=typeof b_vL_rg[EpLZmqneRKydBBlQipu(0x136)]===EpLZmqneRKydBBlQipu(0x157)?b_vL_rg[EpLZmqneRKydBBlQipu(0x136)]:null,keyInfo[EpLZmqneRKydBBlQipu(0x20b)]=b_vL_rg[EpLZmqneRKydBBlQipu(0x28e)],keyInfo[EpLZmqneRKydBBlQipu(0x1ed)]=b_vL_rg[EpLZmqneRKydBBlQipu(0x1ed)]||EpLZmqneRKydBBlQipu(0x246),updateKeyStatusDisplay(),!![];}catch(kkzdlkAYpbzciGyDySnn){return console[EpLZmqneRKydBBlQipu(0x1d9)](EpLZmqneRKydBBlQipu(0x15d),kkzdlkAYpbzciGyDySnn),!![];}}let customStyles={};try{const savedStyles=localStorage[iYAEM(0x15c)](iYAEM(0x16f));savedStyles&&(customStyles=JSON[iYAEM(0x11d)](savedStyles));}catch(WUtlUivYdOoPzxzSCP){console[iYAEM(0x1d9)](iYAEM(0x14d),WUtlUivYdOoPzxzSCP),customStyles={};}const STYLES={...DEFAULT_STYLES,...customStyles};function saveCustomStyles(){const itQsk=iYAEM;try{localStorage[itQsk(0x2aa)](itQsk(0x16f),JSON[itQsk(0x269)](customStyles));}catch(ZbJ_DVqa_LNwGCVnS){console[itQsk(0x1d9)](itQsk(0x150),ZbJ_DVqa_LNwGCVnS),showToast(itQsk(0x22c),itQsk(0x1d9));}}const CHAR_COUNTER_SETTINGS={'maxChars':0x190,'warningThresholds':{'low':0.5,'medium':0.75,'high':0.9},'pulseThreshold':0x32,'colorScheme':{'normal':{'bg':iYAEM(0x28d),'text':iYAEM(0x18a)},'low':{'bg':iYAEM(0x27e),'text':iYAEM(0x225)},'medium':{'bg':iYAEM(0x142),'text':iYAEM(0x21b)},'high':{'bg':iYAEM(0x12e),'text':iYAEM(0x170)}}};function updateCharCounter(){const MoICgFTHwF_tYPWsoJrq=iYAEM,anBtCTDyaNumDiKCEVecZqDfY=CHAR_COUNTER_SETTINGS,tyGSyrXc$AfNwNKHm_mozlQKict=messageInput[MoICgFTHwF_tYPWsoJrq(0x122)][MoICgFTHwF_tYPWsoJrq(0x1d1)],ZbRqveDZCb$mmPAZEyGd_Vc=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x205)]-tyGSyrXc$AfNwNKHm_mozlQKict,ztYzECHnMzcELaaKgqyYHOWXR=document[MoICgFTHwF_tYPWsoJrq(0x22a)](MoICgFTHwF_tYPWsoJrq(0x26c)),KZU__vtex=document[MoICgFTHwF_tYPWsoJrq(0x22a)](MoICgFTHwF_tYPWsoJrq(0x2a8));ztYzECHnMzcELaaKgqyYHOWXR[MoICgFTHwF_tYPWsoJrq(0x1fc)]=tyGSyrXc$AfNwNKHm_mozlQKict;parseInt(messageInput[MoICgFTHwF_tYPWsoJrq(0x1e3)](MoICgFTHwF_tYPWsoJrq(0x173)))!==anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x205)]&&(messageInput[MoICgFTHwF_tYPWsoJrq(0x14e)](MoICgFTHwF_tYPWsoJrq(0x173),anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x205)]),document[MoICgFTHwF_tYPWsoJrq(0x22a)](MoICgFTHwF_tYPWsoJrq(0x205))[MoICgFTHwF_tYPWsoJrq(0x1fc)]=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x205)]);let lRZX$QwCSM_iBysjsMR;if(tyGSyrXc$AfNwNKHm_mozlQKict>=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x205)]*anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x154)][MoICgFTHwF_tYPWsoJrq(0x10f)])lRZX$QwCSM_iBysjsMR=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x236)][MoICgFTHwF_tYPWsoJrq(0x10f)];else{if(tyGSyrXc$AfNwNKHm_mozlQKict>=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x205)]*anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x154)][MoICgFTHwF_tYPWsoJrq(0x14b)])lRZX$QwCSM_iBysjsMR=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x236)][MoICgFTHwF_tYPWsoJrq(0x14b)];else tyGSyrXc$AfNwNKHm_mozlQKict>=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x205)]*anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x154)][MoICgFTHwF_tYPWsoJrq(0x12a)]?lRZX$QwCSM_iBysjsMR=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x236)][MoICgFTHwF_tYPWsoJrq(0x12a)]:lRZX$QwCSM_iBysjsMR=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x236)][MoICgFTHwF_tYPWsoJrq(0x11e)];}KZU__vtex[MoICgFTHwF_tYPWsoJrq(0x11a)]=MoICgFTHwF_tYPWsoJrq(0x1b4)+lRZX$QwCSM_iBysjsMR['bg']+'\x20'+lRZX$QwCSM_iBysjsMR[MoICgFTHwF_tYPWsoJrq(0x14f)],ZbRqveDZCb$mmPAZEyGd_Vc<=anBtCTDyaNumDiKCEVecZqDfY[MoICgFTHwF_tYPWsoJrq(0x229)]?KZU__vtex[MoICgFTHwF_tYPWsoJrq(0x1cb)][MoICgFTHwF_tYPWsoJrq(0x1c5)](MoICgFTHwF_tYPWsoJrq(0x1e0)):KZU__vtex[MoICgFTHwF_tYPWsoJrq(0x1cb)][MoICgFTHwF_tYPWsoJrq(0x191)](MoICgFTHwF_tYPWsoJrq(0x1e0));}function initCharCounter(){const NFbgf$Ic=iYAEM;document[NFbgf$Ic(0x22a)](NFbgf$Ic(0x205))[NFbgf$Ic(0x1fc)]=CHAR_COUNTER_SETTINGS[NFbgf$Ic(0x205)],updateCharCounter(),messageInput[NFbgf$Ic(0x12f)](NFbgf$Ic(0x14a),updateCharCounter);}async function checkForUpdates(){const hFQg_NyT=iYAEM;try{const GaJUN_Frb=await fetch(hFQg_NyT(0x13d));if(GaJUN_Frb['ok']){const cQPTb=await GaJUN_Frb[hFQg_NyT(0x1e2)](),XyXf_EMBTcLaua_MtEwFbg=cQPTb[hFQg_NyT(0x156)],MvEyG$b$vvUJ=cQPTb[hFQg_NyT(0x1bc)],OMxKkI$dV=cQPTb[hFQg_NyT(0x261)]||hFQg_NyT(0x198);if(isVersionOlder(APP_VERSION,MvEyG$b$vvUJ))return forceUpdate=!![],showForceUpdateMessage(OMxKkI$dV,cQPTb[hFQg_NyT(0x21f)]),![];else isVersionOlder(APP_VERSION,XyXf_EMBTcLaua_MtEwFbg)&&(isUpdateAvailable=!![],window[hFQg_NyT(0x297)]=XyXf_EMBTcLaua_MtEwFbg,window[hFQg_NyT(0x261)]=OMxKkI$dV,validatedApiKey&&showUpdateAvailableToast(XyXf_EMBTcLaua_MtEwFbg));return!![];}return!![];}catch(bgPLRQGxhYWHIkUTqJ){return console[hFQg_NyT(0x1d9)](hFQg_NyT(0x1ae),bgPLRQGxhYWHIkUTqJ),!![];}}function parseVersion(iWIeOqRjxHyC_H){const d$rQVl$FdV=iYAEM;return iWIeOqRjxHyC_H[d$rQVl$FdV(0x27c)]('.')[d$rQVl$FdV(0x1eb)](Number);}function isVersionOlder(LPKOrsSptS,BwVSczzfQf){const S_b$Wcy=iYAEM,cG_DbFo$GI=parseVersion(LPKOrsSptS),IgUK_hBkRgoUbjfj=parseVersion(BwVSczzfQf);for(let rvhsnVynPColxqaIDKYVKOzzF=Math.max(parseInt(0x9d9),0x9d9)+Number(0x1)*0x67d+Math.ceil(-0x1056);rvhsnVynPColxqaIDKYVKOzzF<Math[S_b$Wcy(0x285)](cG_DbFo$GI[S_b$Wcy(0x1d1)],IgUK_hBkRgoUbjfj[S_b$Wcy(0x1d1)]);rvhsnVynPColxqaIDKYVKOzzF++){const csFzwPds_EJXsfG=cG_DbFo$GI[rvhsnVynPColxqaIDKYVKOzzF]||-0x172d+Math.floor(-0x1b)*Number(0x4d)+0x1f4c,UZUTcDQHdjugNsd=IgUK_hBkRgoUbjfj[rvhsnVynPColxqaIDKYVKOzzF]||Number(-parseInt(0x1a02))+Math.floor(-parseInt(0x41e))+Math.max(0x1e20,parseInt(0x1e20));if(csFzwPds_EJXsfG<UZUTcDQHdjugNsd)return!![];if(csFzwPds_EJXsfG>UZUTcDQHdjugNsd)return![];}return![];}function showForceUpdateMessage(KqvypafA_vpun,GQo$uuVMhu_xmjKllUhJRoVq){const eVVqftYlvNTgjUEvqngzJm=iYAEM;document[eVVqftYlvNTgjUEvqngzJm(0x1d4)][eVVqftYlvNTgjUEvqngzJm(0x1ee)]=eVVqftYlvNTgjUEvqngzJm(0x119)+(GQo$uuVMhu_xmjKllUhJRoVq||eVVqftYlvNTgjUEvqngzJm(0x241))+eVVqftYlvNTgjUEvqngzJm(0x27f)+APP_VERSION+eVVqftYlvNTgjUEvqngzJm(0x253)+(KqvypafA_vpun?eVVqftYlvNTgjUEvqngzJm(0x282)+KqvypafA_vpun+eVVqftYlvNTgjUEvqngzJm(0x12c):'')+eVVqftYlvNTgjUEvqngzJm(0x273);}function showUpdateAvailableToast(F_VkYKrIqbm_ulEdkKpxmcEIEDD){const ErppIZgVvHOJ_sArid=iYAEM;if(!validatedApiKey)return;showToast(ErppIZgVvHOJ_sArid(0x29f)+F_VkYKrIqbm_ulEdkKpxmcEIEDD+')',ErppIZgVvHOJ_sArid(0x138),parseFloat(0x1014)*Math.trunc(-0x1)+0x2483*Math.trunc(parseInt(0x1))+Math.max(parseInt(0xd5),0xd5)*Number(0xd));const htipQdJyiZJq_uwTVDm=document[ErppIZgVvHOJ_sArid(0x132)](ErppIZgVvHOJ_sArid(0x258));htipQdJyiZJq_uwTVDm['id']=ErppIZgVvHOJ_sArid(0x2a6),htipQdJyiZJq_uwTVDm[ErppIZgVvHOJ_sArid(0x11a)]=ErppIZgVvHOJ_sArid(0x23e),htipQdJyiZJq_uwTVDm[ErppIZgVvHOJ_sArid(0x199)][ErppIZgVvHOJ_sArid(0x1cc)]=ErppIZgVvHOJ_sArid(0x29e),htipQdJyiZJq_uwTVDm[ErppIZgVvHOJ_sArid(0x199)][ErppIZgVvHOJ_sArid(0x196)]=ErppIZgVvHOJ_sArid(0x220),htipQdJyiZJq_uwTVDm[ErppIZgVvHOJ_sArid(0x1ee)]=ErppIZgVvHOJ_sArid(0x202),htipQdJyiZJq_uwTVDm[ErppIZgVvHOJ_sArid(0x207)]=()=>showUpdateInfo(F_VkYKrIqbm_ulEdkKpxmcEIEDD);const vpPdQLRGl_e_MO=document[ErppIZgVvHOJ_sArid(0x22a)](ErppIZgVvHOJ_sArid(0x2a6));if(vpPdQLRGl_e_MO)vpPdQLRGl_e_MO[ErppIZgVvHOJ_sArid(0x191)]();document[ErppIZgVvHOJ_sArid(0x1d4)][ErppIZgVvHOJ_sArid(0x221)](htipQdJyiZJq_uwTVDm);}function showUpdateInfo(lna$ov){const h$_rYPSFFWsdwTYKuTPwCbQnFY=iYAEM;addMessage(h$_rYPSFFWsdwTYKuTPwCbQnFY(0x260)+lna$ov+h$_rYPSFFWsdwTYKuTPwCbQnFY(0x26a)+APP_VERSION+h$_rYPSFFWsdwTYKuTPwCbQnFY(0x2b2),h$_rYPSFFWsdwTYKuTPwCbQnFY(0x1c9));}function updateKeyStatusDisplay(){const eFvPpafjpGoutDgblen=iYAEM;typeof keyInfo[eFvPpafjpGoutDgblen(0x28a)]===eFvPpafjpGoutDgblen(0x157)?keyInfo[eFvPpafjpGoutDgblen(0x28a)]>0x1df7+Math.ceil(parseInt(0x13da))+-parseInt(0x3)*0x109b?(keyStatusEl[eFvPpafjpGoutDgblen(0x1fc)]=keyInfo[eFvPpafjpGoutDgblen(0x28a)]+eFvPpafjpGoutDgblen(0x1b3),keyStatusEl[eFvPpafjpGoutDgblen(0x11a)]=eFvPpafjpGoutDgblen(0x2a5)):(keyStatusEl[eFvPpafjpGoutDgblen(0x1fc)]=eFvPpafjpGoutDgblen(0x1b6),keyStatusEl[eFvPpafjpGoutDgblen(0x11a)]=eFvPpafjpGoutDgblen(0x120)):(keyStatusEl[eFvPpafjpGoutDgblen(0x1fc)]=eFvPpafjpGoutDgblen(0x15a),keyStatusEl[eFvPpafjpGoutDgblen(0x11a)]=eFvPpafjpGoutDgblen(0x18a));}function logout(){const Nl_apdS=iYAEM;localStorage[Nl_apdS(0x2b6)](Nl_apdS(0x151)),validatedApiKey=null,conversationHistory=[],messages[Nl_apdS(0x1ee)]='',apiKeyModal[Nl_apdS(0x199)][Nl_apdS(0x272)]=Nl_apdS(0x230),chatInterface[Nl_apdS(0x199)][Nl_apdS(0x272)]=Nl_apdS(0x195),apiKeyError[Nl_apdS(0x1cb)][Nl_apdS(0x1c5)](Nl_apdS(0x24a)),apiKeyInput[Nl_apdS(0x122)]='',showToast(Nl_apdS(0x1b8),Nl_apdS(0x1d2));}async function init(){const TbMIHLIGsMKEEQeELgnKY=iYAEM;deviceId=await generateDeviceId(),document[TbMIHLIGsMKEEQeELgnKY(0x22a)](TbMIHLIGsMKEEQeELgnKY(0x2a4))[TbMIHLIGsMKEEQeELgnKY(0x1fc)]=APP_VERSION;const R_ak_HaJBYxgJYHiTorba=localStorage[TbMIHLIGsMKEEQeELgnKY(0x15c)](TbMIHLIGsMKEEQeELgnKY(0x151));if(R_ak_HaJBYxgJYHiTorba)try{const {data:TiowYDxRgbmOVBYwYZlCUfwIi,error:LV$xGdhfYkFQ}=await supabaseClient[TbMIHLIGsMKEEQeELgnKY(0x194)](TbMIHLIGsMKEEQeELgnKY(0x284),{'p_key':R_ak_HaJBYxgJYHiTorba,'p_device_id':deviceId});if(LV$xGdhfYkFQ)throw LV$xGdhfYkFQ;if(TiowYDxRgbmOVBYwYZlCUfwIi&&TiowYDxRgbmOVBYwYZlCUfwIi[TbMIHLIGsMKEEQeELgnKY(0x249)]){validatedApiKey=R_ak_HaJBYxgJYHiTorba;const zEk$NEDEbciNCzP=await checkKeyStatus();if(zEk$NEDEbciNCzP){apiKeyModal[TbMIHLIGsMKEEQeELgnKY(0x199)][TbMIHLIGsMKEEQeELgnKY(0x272)]=TbMIHLIGsMKEEQeELgnKY(0x195),chatInterface[TbMIHLIGsMKEEQeELgnKY(0x199)][TbMIHLIGsMKEEQeELgnKY(0x272)]=TbMIHLIGsMKEEQeELgnKY(0x230),updateStatus(),addMessage(TbMIHLIGsMKEEQeELgnKY(0x19f),TbMIHLIGsMKEEQeELgnKY(0x1c9)),showWelcomeGuide(),showToast(TbMIHLIGsMKEEQeELgnKY(0x1fd),TbMIHLIGsMKEEQeELgnKY(0x1d2));isUpdateAvailable&&window[TbMIHLIGsMKEEQeELgnKY(0x297)]&&showUpdateAvailableToast(window[TbMIHLIGsMKEEQeELgnKY(0x297)]);return;}}else localStorage[TbMIHLIGsMKEEQeELgnKY(0x2b6)](TbMIHLIGsMKEEQeELgnKY(0x151)),showToast(TbMIHLIGsMKEEQeELgnKY(0x145),TbMIHLIGsMKEEQeELgnKY(0x1d9));}catch(LRwIJuySAE_wQzrqpdCg){console[TbMIHLIGsMKEEQeELgnKY(0x1d9)](TbMIHLIGsMKEEQeELgnKY(0x166),LRwIJuySAE_wQzrqpdCg),localStorage[TbMIHLIGsMKEEQeELgnKY(0x2b6)](TbMIHLIGsMKEEQeELgnKY(0x151)),showToast(TbMIHLIGsMKEEQeELgnKY(0x153),TbMIHLIGsMKEEQeELgnKY(0x1d9));}apiKeyModal[TbMIHLIGsMKEEQeELgnKY(0x199)][TbMIHLIGsMKEEQeELgnKY(0x272)]=TbMIHLIGsMKEEQeELgnKY(0x230),chatInterface[TbMIHLIGsMKEEQeELgnKY(0x199)][TbMIHLIGsMKEEQeELgnKY(0x272)]=TbMIHLIGsMKEEQeELgnKY(0x195),apiKeyError[TbMIHLIGsMKEEQeELgnKY(0x1cb)][TbMIHLIGsMKEEQeELgnKY(0x1c5)](TbMIHLIGsMKEEQeELgnKY(0x24a));}function showToast(IwvreIkF,sMjgpfiFZbBiiXK_s=iYAEM(0x138),naclcRZHPv=Math.max(parseInt(0x17b3),0x17b3)*-parseInt(0x1)+Math.max(-0x1c8e,-parseInt(0x1c8e))+parseInt(0x3ff9)*Math.trunc(0x1)){const RK_aZgfr_gv=iYAEM,uhCbRMurZtViLWiQ=document[RK_aZgfr_gv(0x132)](RK_aZgfr_gv(0x16e)),abFGonYsnXwFQgfGxYCFVXTRh=sMjgpfiFZbBiiXK_s===RK_aZgfr_gv(0x1d2)?RK_aZgfr_gv(0x118):sMjgpfiFZbBiiXK_s===RK_aZgfr_gv(0x1d9)?RK_aZgfr_gv(0x281):RK_aZgfr_gv(0x234);uhCbRMurZtViLWiQ[RK_aZgfr_gv(0x11a)]=RK_aZgfr_gv(0x1f5)+abFGonYsnXwFQgfGxYCFVXTRh,uhCbRMurZtViLWiQ[RK_aZgfr_gv(0x1ee)]=RK_aZgfr_gv(0x283)+IwvreIkF+RK_aZgfr_gv(0x278),toastContainer[RK_aZgfr_gv(0x221)](uhCbRMurZtViLWiQ),setTimeout(()=>{const HLJkQZLFDPmcFO$hjPnR=RK_aZgfr_gv;uhCbRMurZtViLWiQ[HLJkQZLFDPmcFO$hjPnR(0x1cb)][HLJkQZLFDPmcFO$hjPnR(0x1c5)](HLJkQZLFDPmcFO$hjPnR(0x185)),setTimeout(()=>uhCbRMurZtViLWiQ[HLJkQZLFDPmcFO$hjPnR(0x191)](),Number(-0x8b)*parseInt(0x3d)+Math.floor(-0x158)+Number(parseInt(0x23a3)));},naclcRZHPv);}apiKeyForm[iYAEM(0x231)]=async WZEOIu_Igosz$ST=>{const PFxEuOZtgoczsEKKeB=iYAEM;WZEOIu_Igosz$ST[PFxEuOZtgoczsEKKeB(0x275)]();const Gn_ebvg_KyYkqiWKPallCqT=apiKeyInput[PFxEuOZtgoczsEKKeB(0x122)][PFxEuOZtgoczsEKKeB(0x134)]();if(!Gn_ebvg_KyYkqiWKPallCqT){showError(PFxEuOZtgoczsEKKeB(0x219));return;}try{const {data:qmLMrTIdgOqN,error:ZzANKGCSyLQSFZiWF}=await supabaseClient[PFxEuOZtgoczsEKKeB(0x194)](PFxEuOZtgoczsEKKeB(0x284),{'p_key':Gn_ebvg_KyYkqiWKPallCqT,'p_device_id':deviceId});if(ZzANKGCSyLQSFZiWF)throw ZzANKGCSyLQSFZiWF;qmLMrTIdgOqN&&qmLMrTIdgOqN[PFxEuOZtgoczsEKKeB(0x249)]?(localStorage[PFxEuOZtgoczsEKKeB(0x2aa)](PFxEuOZtgoczsEKKeB(0x151),Gn_ebvg_KyYkqiWKPallCqT),validatedApiKey=Gn_ebvg_KyYkqiWKPallCqT,await checkKeyStatus(),apiKeyModal[PFxEuOZtgoczsEKKeB(0x199)][PFxEuOZtgoczsEKKeB(0x272)]=PFxEuOZtgoczsEKKeB(0x195),chatInterface[PFxEuOZtgoczsEKKeB(0x199)][PFxEuOZtgoczsEKKeB(0x272)]=PFxEuOZtgoczsEKKeB(0x230),updateStatus(),addMessage(PFxEuOZtgoczsEKKeB(0x19b)+keyInfo[PFxEuOZtgoczsEKKeB(0x1ed)]+PFxEuOZtgoczsEKKeB(0x29a),PFxEuOZtgoczsEKKeB(0x1c9)),setTimeout(()=>{showWelcomeGuide();},0xb*-0x1df+-parseInt(0x639)+Math.ceil(parseInt(0x2))*parseInt(0xd99)),showToast(PFxEuOZtgoczsEKKeB(0x1ca),PFxEuOZtgoczsEKKeB(0x1d2))):(showError(PFxEuOZtgoczsEKKeB(0x20d)),showToast(PFxEuOZtgoczsEKKeB(0x20d),PFxEuOZtgoczsEKKeB(0x1d9)));}catch(tIuVBtzuwcCymXgHQb){console[PFxEuOZtgoczsEKKeB(0x1d9)](PFxEuOZtgoczsEKKeB(0x235),tIuVBtzuwcCymXgHQb),showError(PFxEuOZtgoczsEKKeB(0x222)),showToast(PFxEuOZtgoczsEKKeB(0x222),PFxEuOZtgoczsEKKeB(0x1d9));}};function initCopyButtons(){const ckd$IqdWcxFgJohUYfvtTovr=iYAEM;document[ckd$IqdWcxFgJohUYfvtTovr(0x12f)](ckd$IqdWcxFgJohUYfvtTovr(0x22f),function(cbUu$ELMeFvNDLVZwrnE){const mZbeiI=ckd$IqdWcxFgJohUYfvtTovr,pdQdX$_v=cbUu$ELMeFvNDLVZwrnE[mZbeiI(0x15b)][mZbeiI(0x1f2)](mZbeiI(0x271));if(!pdQdX$_v)return;const BYPI$uM=pdQdX$_v[mZbeiI(0x1e3)](mZbeiI(0x1e7)),dlDjQtO$ieWJKPNP=document[mZbeiI(0x22a)](BYPI$uM);if(dlDjQtO$ieWJKPNP){const uaYXhQ_l=dlDjQtO$ieWJKPNP[mZbeiI(0x1fc)];navigator[mZbeiI(0x223)][mZbeiI(0x206)](uaYXhQ_l)[mZbeiI(0x1ab)](()=>{const gddcaBYQCm$HmawSaEgJjb=mZbeiI,PUWYNvEJcVaKGPMU=pdQdX$_v[gddcaBYQCm$HmawSaEgJjb(0x1ee)];pdQdX$_v[gddcaBYQCm$HmawSaEgJjb(0x1ee)]=gddcaBYQCm$HmawSaEgJjb(0x1ba),pdQdX$_v[gddcaBYQCm$HmawSaEgJjb(0x199)][gddcaBYQCm$HmawSaEgJjb(0x203)]=gddcaBYQCm$HmawSaEgJjb(0x1b9),setTimeout(()=>{const awMnyCpo=gddcaBYQCm$HmawSaEgJjb;pdQdX$_v[awMnyCpo(0x1ee)]=PUWYNvEJcVaKGPMU,pdQdX$_v[awMnyCpo(0x199)][awMnyCpo(0x203)]='';},Math.max(-parseInt(0xe0),-parseInt(0xe0))+0x1d*0x151+-0x1d7d);})[mZbeiI(0x13a)](vzEL$$UrUSxWEPpovmcrLH=>{const bE_Lwy=mZbeiI;console[bE_Lwy(0x1d9)](bE_Lwy(0x2a7),vzEL$$UrUSxWEPpovmcrLH),showToast(bE_Lwy(0x143),bE_Lwy(0x1d9));});}});}function showWelcomeGuide(){const sMk$asgUFy=iYAEM;addMessage(sMk$asgUFy(0x299),sMk$asgUFy(0x1c9)),setTimeout(scrollToBottom,Math.trunc(-parseInt(0x1c))*-0x12a+parseInt(0x662)+0x1*Math.max(-0x2696,-parseInt(0x2696)));}function deleteCustomStyle(cHoeXtwNJf$igHrcWOViJXM){const BBpoFqorQmWLWK$f=iYAEM;if(!STYLES[cHoeXtwNJf$igHrcWOViJXM])return showToast(BBpoFqorQmWLWK$f(0x201)+cHoeXtwNJf$igHrcWOViJXM+BBpoFqorQmWLWK$f(0x116),BBpoFqorQmWLWK$f(0x1d9)),![];if(DEFAULT_STYLES[cHoeXtwNJf$igHrcWOViJXM])return showToast(BBpoFqorQmWLWK$f(0x115),BBpoFqorQmWLWK$f(0x1d9)),![];const yz_XQtLcyRDwCXhLqRUI=STYLES[cHoeXtwNJf$igHrcWOViJXM][BBpoFqorQmWLWK$f(0x1ed)],cXfiVwvtilyLZweuIJvfY=cHoeXtwNJf$igHrcWOViJXM===currentStyle;return delete STYLES[cHoeXtwNJf$igHrcWOViJXM],delete customStyles[cHoeXtwNJf$igHrcWOViJXM],saveCustomStyles(),cXfiVwvtilyLZweuIJvfY?(currentStyle='3',updateStatus(),addMessage(BBpoFqorQmWLWK$f(0x18d)+cHoeXtwNJf$igHrcWOViJXM+'\x20('+yz_XQtLcyRDwCXhLqRUI+BBpoFqorQmWLWK$f(0x178),BBpoFqorQmWLWK$f(0x1c9))):addMessage(BBpoFqorQmWLWK$f(0x18d)+cHoeXtwNJf$igHrcWOViJXM+'\x20('+yz_XQtLcyRDwCXhLqRUI+BBpoFqorQmWLWK$f(0x112),BBpoFqorQmWLWK$f(0x1c9)),showToast(BBpoFqorQmWLWK$f(0x201)+cHoeXtwNJf$igHrcWOViJXM+BBpoFqorQmWLWK$f(0x2ac),BBpoFqorQmWLWK$f(0x1d2)),setTimeout(scrollToBottom,-parseInt(0x1)*0x1541+-0x60a+Math.max(-parseInt(0x175),-parseInt(0x175))*Math.max(-parseInt(0x13),-0x13)),!![];}function scrollToBottom(){const RRsB_$U=iYAEM;messages[RRsB_$U(0x1a5)]=messages[RRsB_$U(0x1c6)];}function showError(mOWGsDzqSUNdHobFefepmE){const rFiJjHyiupElHOljEqW=iYAEM;apiKeyError[rFiJjHyiupElHOljEqW(0x1fc)]=mOWGsDzqSUNdHobFefepmE,apiKeyError[rFiJjHyiupElHOljEqW(0x1cb)][rFiJjHyiupElHOljEqW(0x191)](rFiJjHyiupElHOljEqW(0x24a));}async function handleSubmit(Axlu_dEBhLZH){const saREFZ$Dy_wkM=iYAEM;Axlu_dEBhLZH[saREFZ$Dy_wkM(0x275)]();const yKCgYppRGadKnaisTKuRxr=messageInput[saREFZ$Dy_wkM(0x122)][saREFZ$Dy_wkM(0x134)]();if(!yKCgYppRGadKnaisTKuRxr||isProcessing)return;if(forceUpdate){showToast(saREFZ$Dy_wkM(0x292),saREFZ$Dy_wkM(0x1d9));return;}messageInput[saREFZ$Dy_wkM(0x122)]='';if(yKCgYppRGadKnaisTKuRxr[saREFZ$Dy_wkM(0x193)]('-')){handleCommand(yKCgYppRGadKnaisTKuRxr);return;}const zXtgqFRJ=await checkKeyStatus();if(!zXtgqFRJ)return;if(typeof keyInfo[saREFZ$Dy_wkM(0x28a)]!==saREFZ$Dy_wkM(0x157)||keyInfo[saREFZ$Dy_wkM(0x28a)]<=-0xe*parseInt(parseInt(0xf9))+parseFloat(parseInt(0x22d6))+-0x1538){addMessage(saREFZ$Dy_wkM(0x1bd),saREFZ$Dy_wkM(0x1d9)),showToast(saREFZ$Dy_wkM(0x1a8),saREFZ$Dy_wkM(0x1d9));return;}addMessage(yKCgYppRGadKnaisTKuRxr,saREFZ$Dy_wkM(0x17a)),isProcessing=!![],updateSendButton(),showToast(saREFZ$Dy_wkM(0x1a4),saREFZ$Dy_wkM(0x138));try{const HcTXnyc$ssfwcGAO=Date[saREFZ$Dy_wkM(0x266)](),LmAhRzam_elzVYova=saREFZ$Dy_wkM(0x189),GxtxpbdxuQSpfswPB={'model':MODELS[currentModel]['id'],'contents':[{'role':saREFZ$Dy_wkM(0x17a),'parts':[{'text':STYLES[currentStyle][saREFZ$Dy_wkM(0x14f)]}]},{'role':saREFZ$Dy_wkM(0x1da),'parts':[{'text':saREFZ$Dy_wkM(0x263)}]},...conversationHistory[saREFZ$Dy_wkM(0x1eb)](zN$TwdGEtm_tl=>({'role':zN$TwdGEtm_tl[saREFZ$Dy_wkM(0x25b)],'parts':[{'text':zN$TwdGEtm_tl[saREFZ$Dy_wkM(0x1d5)][parseFloat(0x1)*-parseInt(0x20bf)+-parseInt(0x194a)+-parseInt(0x3a09)*-parseInt(0x1)][saREFZ$Dy_wkM(0x14f)]}]})),{'role':saREFZ$Dy_wkM(0x17a),'parts':[{'text':yKCgYppRGadKnaisTKuRxr}]}],'sessionInfo':{'deviceId':deviceId,'timestamp':Date[saREFZ$Dy_wkM(0x266)]()[saREFZ$Dy_wkM(0x181)]()},'style':STYLES[currentStyle][saREFZ$Dy_wkM(0x1ed)]},ciKrVtERae=JSON[saREFZ$Dy_wkM(0x269)](GxtxpbdxuQSpfswPB),nRNTFXgAGjsRbQ_c=Date[saREFZ$Dy_wkM(0x266)](),IdZJpxoZVLInASooIARPtrHYH=generateNonce(),QObmXbxNlbOkKvIgtRQwvCtJ=await generateSignature(ciKrVtERae,nRNTFXgAGjsRbQ_c,IdZJpxoZVLInASooIARPtrHYH,validatedApiKey);console[saREFZ$Dy_wkM(0x192)](saREFZ$Dy_wkM(0x1b1),{'version':APP_VERSION,'timestamp':nRNTFXgAGjsRbQ_c,'nonce':IdZJpxoZVLInASooIARPtrHYH,'signature':QObmXbxNlbOkKvIgtRQwvCtJ[saREFZ$Dy_wkM(0x214)](parseFloat(0x5)*Math.ceil(-parseInt(0x137))+-0x208b+Math.ceil(-0x269e)*Math.max(-parseInt(0x1),-0x1),-parseInt(0x193)*-0xa+-parseInt(0x1b87)+0x1*0xbd3)+saREFZ$Dy_wkM(0x1b7)});const Foe_D_jAOFo=await fetch(LmAhRzam_elzVYova,{'method':saREFZ$Dy_wkM(0x146),'headers':{'Content-Type':saREFZ$Dy_wkM(0x25d),'X-Client-Version':APP_VERSION,'X-Request-Signature':QObmXbxNlbOkKvIgtRQwvCtJ,'X-Request-Timestamp':nRNTFXgAGjsRbQ_c[saREFZ$Dy_wkM(0x181)](),'X-Request-Nonce':IdZJpxoZVLInASooIARPtrHYH,'X-Api-Key':validatedApiKey},'body':ciKrVtERae}),AYIGymNwcu$nOS_DSNLPN=await Foe_D_jAOFo[saREFZ$Dy_wkM(0x1e2)]();if(!Foe_D_jAOFo['ok']&&Foe_D_jAOFo[saREFZ$Dy_wkM(0x11b)]===Math.ceil(parseInt(0x2327))+Number(parseInt(0x8ae))*0x2+-0x32f2){console[saREFZ$Dy_wkM(0x1d9)](saREFZ$Dy_wkM(0x1db),AYIGymNwcu$nOS_DSNLPN);throw new Error(saREFZ$Dy_wkM(0x141)+AYIGymNwcu$nOS_DSNLPN[saREFZ$Dy_wkM(0x1d9)]);}if(AYIGymNwcu$nOS_DSNLPN[saREFZ$Dy_wkM(0x25a)]){if(AYIGymNwcu$nOS_DSNLPN[saREFZ$Dy_wkM(0x25a)][saREFZ$Dy_wkM(0x16b)]){forceUpdate=!![],showForceUpdateMessage();throw new Error(saREFZ$Dy_wkM(0x27b));}else AYIGymNwcu$nOS_DSNLPN[saREFZ$Dy_wkM(0x25a)][saREFZ$Dy_wkM(0x160)]&&!isUpdateAvailable&&(isUpdateAvailable=!![],showUpdateAvailableToast(AYIGymNwcu$nOS_DSNLPN[saREFZ$Dy_wkM(0x25a)][saREFZ$Dy_wkM(0x156)]));}if(!Foe_D_jAOFo['ok']){const FzNjOHhokRBZJtEUOPNc=AYIGymNwcu$nOS_DSNLPN[saREFZ$Dy_wkM(0x1d9)]||saREFZ$Dy_wkM(0x25c);throw new Error(FzNjOHhokRBZJtEUOPNc);}const SjaVYr_OTPglkAowjRWT=AYIGymNwcu$nOS_DSNLPN[saREFZ$Dy_wkM(0x13c)]?.[-0x1a33+Math.floor(parseInt(0x1b5c))+Math.trunc(-0x129)]?.[saREFZ$Dy_wkM(0x1a1)]?.[saREFZ$Dy_wkM(0x1d5)]?.[Math.trunc(-parseInt(0x1cb))+-parseInt(0x22)*-parseInt(0xdf)+0x11*Math.max(-parseInt(0x1a3),-0x1a3)]?.[saREFZ$Dy_wkM(0x14f)]||saREFZ$Dy_wkM(0x14c),meV$XrAQ_pex=((Date[saREFZ$Dy_wkM(0x266)]()-HcTXnyc$ssfwcGAO)/(parseInt(0x3f2)+parseFloat(-parseInt(0x154d))+Math.ceil(parseInt(0x1543))))[saREFZ$Dy_wkM(0x125)](-0x1*0x57e+parseInt(0x2d1)*-parseInt(0xb)+Math.trunc(0x2)*Number(0x123d));try{await supabaseClient[saREFZ$Dy_wkM(0x194)](saREFZ$Dy_wkM(0x270),{'p_key':validatedApiKey,'p_device_id':deviceId}),await checkKeyStatus();}catch(pF$jgAXIjXSx){console[saREFZ$Dy_wkM(0x1d9)](saREFZ$Dy_wkM(0x1b5),pF$jgAXIjXSx),typeof keyInfo[saREFZ$Dy_wkM(0x28a)]===saREFZ$Dy_wkM(0x157)&&keyInfo[saREFZ$Dy_wkM(0x28a)]>parseInt(-parseInt(0x1afb))*-0x1+-0x332+parseFloat(-parseInt(0x17c9))&&(keyInfo[saREFZ$Dy_wkM(0x28a)]--,updateKeyStatusDisplay());}addMessage(SjaVYr_OTPglkAowjRWT,saREFZ$Dy_wkM(0x129),meV$XrAQ_pex),conversationHistory[saREFZ$Dy_wkM(0x28b)]({'role':saREFZ$Dy_wkM(0x17a),'parts':[{'text':yKCgYppRGadKnaisTKuRxr}]},{'role':saREFZ$Dy_wkM(0x1da),'parts':[{'text':SjaVYr_OTPglkAowjRWT}]}),updateMessageCount(),showToast(saREFZ$Dy_wkM(0x13f)+meV$XrAQ_pex+'s',saREFZ$Dy_wkM(0x1d2));}catch(KABoqwPdnOcNbMoo){console[saREFZ$Dy_wkM(0x1d9)](saREFZ$Dy_wkM(0x1f3),KABoqwPdnOcNbMoo),KABoqwPdnOcNbMoo[saREFZ$Dy_wkM(0x21f)]&&(KABoqwPdnOcNbMoo[saREFZ$Dy_wkM(0x21f)][saREFZ$Dy_wkM(0x1ef)](saREFZ$Dy_wkM(0x233))||KABoqwPdnOcNbMoo[saREFZ$Dy_wkM(0x21f)][saREFZ$Dy_wkM(0x1ef)](saREFZ$Dy_wkM(0x215)))?await checkKeyStatus():(addMessage(saREFZ$Dy_wkM(0x228)+KABoqwPdnOcNbMoo[saREFZ$Dy_wkM(0x21f)],saREFZ$Dy_wkM(0x1d9)),showToast(saREFZ$Dy_wkM(0x228)+KABoqwPdnOcNbMoo[saREFZ$Dy_wkM(0x21f)],saREFZ$Dy_wkM(0x1d9)));}finally{isProcessing=![],updateSendButton();}}function handleCommand(yqGvd_SnxO){const ChWrMBdgeqcQhtcgCyP_DbSKX=iYAEM,HOYLfvZrxbFWYJbFRt_IOrQ_GS=yqGvd_SnxO[ChWrMBdgeqcQhtcgCyP_DbSKX(0x1de)](0x16*0x104+-parseInt(0x16f)*-0x9+-parseInt(0x233e))[ChWrMBdgeqcQhtcgCyP_DbSKX(0x27c)]('\x20'),O_lbUMooi_g=HOYLfvZrxbFWYJbFRt_IOrQ_GS[0x1*-parseInt(0x1c9d)+0x3*-0x78d+Math.trunc(-0x304)*-0x11][ChWrMBdgeqcQhtcgCyP_DbSKX(0x1d7)]();switch(O_lbUMooi_g){case ChWrMBdgeqcQhtcgCyP_DbSKX(0x20e):showHelp();break;case ChWrMBdgeqcQhtcgCyP_DbSKX(0x1da):break;case ChWrMBdgeqcQhtcgCyP_DbSKX(0x199):break;case ChWrMBdgeqcQhtcgCyP_DbSKX(0x2a1):clearHistory();break;case ChWrMBdgeqcQhtcgCyP_DbSKX(0x11b):showKeyInfo();break;case ChWrMBdgeqcQhtcgCyP_DbSKX(0x211):showVersionInfo();break;case ChWrMBdgeqcQhtcgCyP_DbSKX(0x1fe):logout();break;case ChWrMBdgeqcQhtcgCyP_DbSKX(0x2b4):checkForUpdates();break;default:addMessage(ChWrMBdgeqcQhtcgCyP_DbSKX(0x255)+O_lbUMooi_g+ChWrMBdgeqcQhtcgCyP_DbSKX(0x11c),ChWrMBdgeqcQhtcgCyP_DbSKX(0x1d9)),showToast(ChWrMBdgeqcQhtcgCyP_DbSKX(0x255)+O_lbUMooi_g,ChWrMBdgeqcQhtcgCyP_DbSKX(0x1d9));}}function showVersionInfo(){const hASEDOupyBdLGnseBuM_y$Q=iYAEM;addMessage(hASEDOupyBdLGnseBuM_y$Q(0x17c)+APP_VERSION+hASEDOupyBdLGnseBuM_y$Q(0x1f1)+(isUpdateAvailable?hASEDOupyBdLGnseBuM_y$Q(0x183):'No')+hASEDOupyBdLGnseBuM_y$Q(0x288)+(forceUpdate?hASEDOupyBdLGnseBuM_y$Q(0x183):'No')+hASEDOupyBdLGnseBuM_y$Q(0x12b),hASEDOupyBdLGnseBuM_y$Q(0x1c9)),setTimeout(scrollToBottom,Math.ceil(-0x81d)+-parseInt(0xf15)+0x1796);}function showHelp(){const ednKUUOQYegsZS_SDFv=iYAEM,oj_XOyOBR=Object[ednKUUOQYegsZS_SDFv(0x1a9)](STYLES)[ednKUUOQYegsZS_SDFv(0x1eb)](([GBSTVqcybdjUWX,JGZtJjHNpJDtb_qQtwza])=>'-\x20'+GBSTVqcybdjUWX+'.\x20'+JGZtJjHNpJDtb_qQtwza[ednKUUOQYegsZS_SDFv(0x1ed)]+(GBSTVqcybdjUWX===currentStyle?ednKUUOQYegsZS_SDFv(0x1bb):'')+(DEFAULT_STYLES[GBSTVqcybdjUWX]?'':ednKUUOQYegsZS_SDFv(0x1a6)))[ednKUUOQYegsZS_SDFv(0x19a)]('\x0a'),Z$jgaIEXsqlDghfsWjPQN=ednKUUOQYegsZS_SDFv(0x1d3)+Object[ednKUUOQYegsZS_SDFv(0x1a9)](MODELS)[ednKUUOQYegsZS_SDFv(0x1eb)](([QyVfTUAPHr_HUHkY,cvl$QSL$kNQAZ])=>'-\x20'+QyVfTUAPHr_HUHkY+'.\x20'+cvl$QSL$kNQAZ[ednKUUOQYegsZS_SDFv(0x1ed)]+(QyVfTUAPHr_HUHkY===currentModel?ednKUUOQYegsZS_SDFv(0x1bb):''))[ednKUUOQYegsZS_SDFv(0x19a)]('\x0a')+ednKUUOQYegsZS_SDFv(0x25f)+oj_XOyOBR+ednKUUOQYegsZS_SDFv(0x128)+MODELS[currentModel][ednKUUOQYegsZS_SDFv(0x1ed)]+ednKUUOQYegsZS_SDFv(0x2a2)+currentModel+ednKUUOQYegsZS_SDFv(0x286)+STYLES[currentStyle][ednKUUOQYegsZS_SDFv(0x1ed)]+ednKUUOQYegsZS_SDFv(0x2a2)+currentStyle+ednKUUOQYegsZS_SDFv(0x168)+conversationHistory[ednKUUOQYegsZS_SDFv(0x1d1)]/(Math.floor(0x123c)+parseFloat(parseInt(0x14ae))*-parseInt(0x1)+parseInt(0x274))+ednKUUOQYegsZS_SDFv(0x259)+(keyInfo[ednKUUOQYegsZS_SDFv(0x28a)]??ednKUUOQYegsZS_SDFv(0x20a))+ednKUUOQYegsZS_SDFv(0x114)+APP_VERSION+(isUpdateAvailable?ednKUUOQYegsZS_SDFv(0x279):'');addMessage(Z$jgaIEXsqlDghfsWjPQN,ednKUUOQYegsZS_SDFv(0x1c9)),setTimeout(scrollToBottom,Math.floor(0x39)*-parseInt(0x5)+Math.ceil(parseInt(0x137b))+Math.max(-parseInt(0x11fa),-parseInt(0x11fa)));}function addCustomStyle(KWFJTSSJ){const y_$sQeNPOCSJt=iYAEM;let DOWSiFMqpvY_Uno_jgSVTVB='4';while(STYLES[DOWSiFMqpvY_Uno_jgSVTVB]){DOWSiFMqpvY_Uno_jgSVTVB=(parseInt(DOWSiFMqpvY_Uno_jgSVTVB)+(0x1e81*-parseInt(0x1)+-parseInt(0x1)*-0x1567+parseInt(0x91b)))[y_$sQeNPOCSJt(0x181)]();}const CacwNYkkD$L={'name':y_$sQeNPOCSJt(0x121)+DOWSiFMqpvY_Uno_jgSVTVB,'text':KWFJTSSJ};return STYLES[DOWSiFMqpvY_Uno_jgSVTVB]=CacwNYkkD$L,customStyles[DOWSiFMqpvY_Uno_jgSVTVB]=CacwNYkkD$L,saveCustomStyles(),addMessage(y_$sQeNPOCSJt(0x18d)+DOWSiFMqpvY_Uno_jgSVTVB+y_$sQeNPOCSJt(0x24e)+KWFJTSSJ[y_$sQeNPOCSJt(0x214)](-0x1*parseInt(0x1c15)+Math.max(-parseInt(0x1ff1),-0x1ff1)+Math.floor(0x1a)*parseInt(0x24f),Math.max(parseInt(0xa16),parseInt(0xa16))*parseInt(0x1)+Math.floor(-parseInt(0x1e0a))+0x1426)+(KWFJTSSJ[y_$sQeNPOCSJt(0x1d1)]>-parseInt(0x24d8)+-0xd4a+parseInt(parseInt(0x3254))*parseFloat(parseInt(0x1))?y_$sQeNPOCSJt(0x1b7):'')+'\x22',y_$sQeNPOCSJt(0x1c9)),showToast(y_$sQeNPOCSJt(0x17e)+DOWSiFMqpvY_Uno_jgSVTVB+y_$sQeNPOCSJt(0x277),y_$sQeNPOCSJt(0x1d2)),setTimeout(scrollToBottom,parseInt(0x2c)*0xd3+0x97*Number(0x13)+parseInt(0x2f15)*-parseInt(0x1)),DOWSiFMqpvY_Uno_jgSVTVB;}function handleCommand(Tg_UMoea$VuPFS){const xoxczKPMtONMtJGJDVMzP=iYAEM,Q_FJvCnqyZCLQySdg=Tg_UMoea$VuPFS[xoxczKPMtONMtJGJDVMzP(0x1de)](0x1b8c+Math.ceil(-parseInt(0x23e2))+parseFloat(0x857))[xoxczKPMtONMtJGJDVMzP(0x27c)]('\x20'),THeQ_mFuMZ_v=Q_FJvCnqyZCLQySdg[parseFloat(parseInt(0x1e00))+-0x146b+Number(0x1)*-0x995][xoxczKPMtONMtJGJDVMzP(0x1d7)]();switch(THeQ_mFuMZ_v){case xoxczKPMtONMtJGJDVMzP(0x20e):showHelp();break;case xoxczKPMtONMtJGJDVMzP(0x1da):const soVZyNhmXKXHmRjrwNghoiAzZ=Q_FJvCnqyZCLQySdg[xoxczKPMtONMtJGJDVMzP(0x1d1)]>0x596+parseInt(0x1812)+-parseInt(0x1)*0x1da7?Q_FJvCnqyZCLQySdg[-parseInt(0x3)*Math.max(-parseInt(0x29),-parseInt(0x29))+-0x10b6+parseInt(0x103c)*Math.max(parseInt(0x1),parseInt(0x1))]:'';if(soVZyNhmXKXHmRjrwNghoiAzZ&&MODELS[soVZyNhmXKXHmRjrwNghoiAzZ])changeModel(soVZyNhmXKXHmRjrwNghoiAzZ);else addMessage(xoxczKPMtONMtJGJDVMzP(0x159)+Object[xoxczKPMtONMtJGJDVMzP(0x127)](MODELS)[xoxczKPMtONMtJGJDVMzP(0x19a)](',\x20'),xoxczKPMtONMtJGJDVMzP(0x1d9));break;case xoxczKPMtONMtJGJDVMzP(0x199):if(Q_FJvCnqyZCLQySdg[xoxczKPMtONMtJGJDVMzP(0x1d1)]>Math.ceil(0xbbd)+Number(0x19d0)*Math.trunc(-parseInt(0x1))+0xe14&&Q_FJvCnqyZCLQySdg[0x2d1*Math.max(0xc,0xc)+parseInt(0x215)*Math.max(-0x2,-0x2)+-parseInt(0x1da1)]==='-d'){const HXOS_QsyV_HFRqS=Q_FJvCnqyZCLQySdg[xoxczKPMtONMtJGJDVMzP(0x1d1)]>-0x313*Math.trunc(-parseInt(0xa))+-0x26ce+0x812?Q_FJvCnqyZCLQySdg[Math.floor(-parseInt(0xd2a))+0x1a*Math.trunc(0x50)+Math.floor(-parseInt(0x11))*-parseInt(0x4c)]:'';if(HXOS_QsyV_HFRqS)deleteCustomStyle(HXOS_QsyV_HFRqS);else addMessage(xoxczKPMtONMtJGJDVMzP(0x274),xoxczKPMtONMtJGJDVMzP(0x1d9));}else{if(Tg_UMoea$VuPFS[xoxczKPMtONMtJGJDVMzP(0x1ef)]('\x22')){const yKffZA=Tg_UMoea$VuPFS[xoxczKPMtONMtJGJDVMzP(0x239)](/-style\s+"([^"]+)"/);if(yKffZA&&yKffZA[Math.trunc(-parseInt(0x126d))*Number(-0x1)+Math.max(-0x17a8,-parseInt(0x17a8))+-parseInt(0x10c)*-parseInt(0x5)]){const p_Z_WQl=yKffZA[-0x27*Math.trunc(parseInt(0x21))+0x1b5b*parseInt(0x1)+-0x1653][xoxczKPMtONMtJGJDVMzP(0x134)]();if(p_Z_WQl[xoxczKPMtONMtJGJDVMzP(0x1d1)]>Number(parseInt(0xd2f))+parseFloat(-0x1b9d)+parseFloat(parseInt(0xe6e))){const cstqdzk=addCustomStyle(p_Z_WQl);changeStyle(cstqdzk);}else addMessage(xoxczKPMtONMtJGJDVMzP(0x10e),xoxczKPMtONMtJGJDVMzP(0x1d9));}else addMessage(xoxczKPMtONMtJGJDVMzP(0x155),xoxczKPMtONMtJGJDVMzP(0x1d9));}else{const eewmByKZ=Q_FJvCnqyZCLQySdg[xoxczKPMtONMtJGJDVMzP(0x1d1)]>Math.max(-0x1,-0x1)*Math.trunc(0xafd)+Math.ceil(parseInt(0x203))*-parseInt(0x11)+parseInt(0x2d31)?Q_FJvCnqyZCLQySdg[0x7*-parseInt(0x3d7)+parseInt(0x863)+-0x1*parseInt(-parseInt(0x127f))]:'';if(eewmByKZ&&STYLES[eewmByKZ])changeStyle(eewmByKZ);else addMessage(xoxczKPMtONMtJGJDVMzP(0x1be)+Object[xoxczKPMtONMtJGJDVMzP(0x127)](STYLES)[xoxczKPMtONMtJGJDVMzP(0x19a)](',\x20'),xoxczKPMtONMtJGJDVMzP(0x1d9));}}break;case xoxczKPMtONMtJGJDVMzP(0x2a1):clearHistory();break;case xoxczKPMtONMtJGJDVMzP(0x11b):showKeyInfo();break;case xoxczKPMtONMtJGJDVMzP(0x211):showVersionInfo();break;case xoxczKPMtONMtJGJDVMzP(0x1fe):logout();break;case xoxczKPMtONMtJGJDVMzP(0x2b4):checkForUpdates();break;default:addMessage(xoxczKPMtONMtJGJDVMzP(0x255)+THeQ_mFuMZ_v+xoxczKPMtONMtJGJDVMzP(0x11c),xoxczKPMtONMtJGJDVMzP(0x1d9)),showToast(xoxczKPMtONMtJGJDVMzP(0x255)+THeQ_mFuMZ_v,xoxczKPMtONMtJGJDVMzP(0x1d9));}}window[iYAEM(0x12f)](iYAEM(0x1ff),scrollToBottom);const originalInit=init;init=async function(){const BljOyLLnjRDarJa=await checkForUpdates();if(!BljOyLLnjRDarJa)return;await originalInit(),initCharCounter(),setTimeout(scrollToBottom,parseInt(parseInt(0x8bf))+-parseInt(0x293)*0x8+-0x1*-parseInt(0xca1));};function changeModel(h$rT$kRcTSQyyriQozTBRcdx){const ffxnJwLCKwlX=iYAEM;if(MODELS[h$rT$kRcTSQyyriQozTBRcdx]){const SwAibuwGUdndkAgniuKyTqvo=MODELS[currentModel];currentModel=h$rT$kRcTSQyyriQozTBRcdx,conversationHistory=[],updateStatus(),addMessage(ffxnJwLCKwlX(0x1c2)+SwAibuwGUdndkAgniuKyTqvo[ffxnJwLCKwlX(0x1ed)]+ffxnJwLCKwlX(0x13b)+MODELS[h$rT$kRcTSQyyriQozTBRcdx][ffxnJwLCKwlX(0x1ed)]+ffxnJwLCKwlX(0x12d),ffxnJwLCKwlX(0x1c9)),showToast(ffxnJwLCKwlX(0x26d)+MODELS[h$rT$kRcTSQyyriQozTBRcdx][ffxnJwLCKwlX(0x1ed)],ffxnJwLCKwlX(0x1d2)),setTimeout(scrollToBottom,-0x1*0x220e+Math.max(-parseInt(0xcbe),-0xcbe)+-0x12e*-0x28);}else addMessage(ffxnJwLCKwlX(0x163)+Object[ffxnJwLCKwlX(0x127)](MODELS)[ffxnJwLCKwlX(0x19a)](',\x20'),ffxnJwLCKwlX(0x1d9)),showToast(ffxnJwLCKwlX(0x268),ffxnJwLCKwlX(0x1d9)),setTimeout(scrollToBottom,parseFloat(0x529)*parseInt(0x7)+-parseInt(0x8d5)*-parseInt(0x4)+0x470f*Math.max(-parseInt(0x1),-0x1));}function changeStyle(kdRoBowYKQXnmNQpspSu){const cZ$Ly_EEUBi=iYAEM;if(STYLES[kdRoBowYKQXnmNQpspSu]){if(currentStyle!==kdRoBowYKQXnmNQpspSu){const DchkauFkkw$ok$EyDDGE=STYLES[currentStyle];currentStyle=kdRoBowYKQXnmNQpspSu,updateStatus(),addMessage(cZ$Ly_EEUBi(0x294)+DchkauFkkw$ok$EyDDGE[cZ$Ly_EEUBi(0x1ed)]+cZ$Ly_EEUBi(0x13b)+STYLES[kdRoBowYKQXnmNQpspSu][cZ$Ly_EEUBi(0x1ed)],cZ$Ly_EEUBi(0x1c9)),showToast(cZ$Ly_EEUBi(0x177)+STYLES[kdRoBowYKQXnmNQpspSu][cZ$Ly_EEUBi(0x1ed)],cZ$Ly_EEUBi(0x1d2)),setTimeout(scrollToBottom,parseInt(0x16fe)+Math.floor(-parseInt(0x251))*-parseInt(0x5)+-parseInt(0x3)*parseInt(0xb65));}}else addMessage(cZ$Ly_EEUBi(0x29b)+Object[cZ$Ly_EEUBi(0x127)](STYLES)[cZ$Ly_EEUBi(0x19a)](',\x20'),cZ$Ly_EEUBi(0x1d9)),showToast(cZ$Ly_EEUBi(0x1ac),cZ$Ly_EEUBi(0x1d9)),setTimeout(scrollToBottom,Math.max(parseInt(0x54d),parseInt(0x54d))*Number(-0x1)+parseInt(0x2369)+-parseInt(0x1db8));}function clearHistory(){const R__eSiFTiSwXLoLiKt=iYAEM;conversationHistory=[],messages[R__eSiFTiSwXLoLiKt(0x1ee)]='',addMessage(R__eSiFTiSwXLoLiKt(0x162),R__eSiFTiSwXLoLiKt(0x1c9)),updateMessageCount(),showToast(R__eSiFTiSwXLoLiKt(0x2a9),R__eSiFTiSwXLoLiKt(0x138)),setTimeout(scrollToBottom,-parseInt(0x1070)+parseInt(0x529)+-parseInt(0x1d)*-parseInt(0x67));}function addMessage(xWJmtT$kDBv_OlIIutPpIW,gSSbAi_$wg,UQWMZNeGZxMiMPlEfIMGHqK){const HXW$lY$t=iYAEM,bM_RyinCfg_MAYwqOmjvH=document[HXW$lY$t(0x132)](HXW$lY$t(0x16e));bM_RyinCfg_MAYwqOmjvH[HXW$lY$t(0x11a)]=HXW$lY$t(0x1d6)+(gSSbAi_$wg===HXW$lY$t(0x1c9)?HXW$lY$t(0x1e5):gSSbAi_$wg===HXW$lY$t(0x17a)?HXW$lY$t(0x23f):gSSbAi_$wg===HXW$lY$t(0x129)?HXW$lY$t(0x1b2):HXW$lY$t(0x17b));let vcViExbYq$OgfLCqYSSZVfRfl=formatMessage(xWJmtT$kDBv_OlIIutPpIW);const oGgcWjVWYMYmML=gSSbAi_$wg===HXW$lY$t(0x17a)?HXW$lY$t(0x290):gSSbAi_$wg===HXW$lY$t(0x129)?HXW$lY$t(0x186):gSSbAi_$wg===HXW$lY$t(0x1c9)?HXW$lY$t(0x1f6):HXW$lY$t(0x2ae);let RHYqnCJRSnchvUghsqUgBBM=HXW$lY$t(0x22e)+(gSSbAi_$wg===HXW$lY$t(0x17a)?HXW$lY$t(0x1f8):gSSbAi_$wg===HXW$lY$t(0x129)?HXW$lY$t(0x1bf):gSSbAi_$wg===HXW$lY$t(0x1c9)?HXW$lY$t(0x18c):HXW$lY$t(0x276))+'\x22>'+oGgcWjVWYMYmML+HXW$lY$t(0x289);UQWMZNeGZxMiMPlEfIMGHqK&&(vcViExbYq$OgfLCqYSSZVfRfl+=HXW$lY$t(0x148)+UQWMZNeGZxMiMPlEfIMGHqK+HXW$lY$t(0x1aa)+MODELS[currentModel][HXW$lY$t(0x1ed)]+HXW$lY$t(0x26b)),bM_RyinCfg_MAYwqOmjvH[HXW$lY$t(0x1ee)]=RHYqnCJRSnchvUghsqUgBBM+HXW$lY$t(0x1af)+vcViExbYq$OgfLCqYSSZVfRfl+HXW$lY$t(0x24d),messages[HXW$lY$t(0x221)](bM_RyinCfg_MAYwqOmjvH),setTimeout(scrollToBottom,parseInt(0x3)*parseInt(0x1f3)+Math.trunc(0x2552)*parseInt(0x1)+Math.floor(parseInt(0x1))*-0x2b21),setTimeout(()=>{const ANb$xlMmF$ddBQOk=HXW$lY$t;window[ANb$xlMmF$ddBQOk(0x19e)]&&bM_RyinCfg_MAYwqOmjvH[ANb$xlMmF$ddBQOk(0x10d)](ANb$xlMmF$ddBQOk(0x117))[ANb$xlMmF$ddBQOk(0x248)](WgqCrltLF$KF=>hljs[ANb$xlMmF$ddBQOk(0x190)](WgqCrltLF$KF));},-0x2*-0xfef+Math.ceil(parseInt(0x7))*parseFloat(0x4b1)+Math.trunc(-0x40ab));}function copyCode(tpTi$igyMOXkICgMeF){const nrNB_Am_AfTSFn=iYAEM,mE_TkSxv$TCZejLmfeo=document[nrNB_Am_AfTSFn(0x22a)](tpTi$igyMOXkICgMeF);if(!mE_TkSxv$TCZejLmfeo)return;const zI$_GyW=mE_TkSxv$TCZejLmfeo[nrNB_Am_AfTSFn(0x1fc)],Vb$BPAiz=document[nrNB_Am_AfTSFn(0x132)](nrNB_Am_AfTSFn(0x187));Vb$BPAiz[nrNB_Am_AfTSFn(0x122)]=zI$_GyW,Vb$BPAiz[nrNB_Am_AfTSFn(0x199)][nrNB_Am_AfTSFn(0x1c7)]=nrNB_Am_AfTSFn(0x23a),document[nrNB_Am_AfTSFn(0x1d4)][nrNB_Am_AfTSFn(0x221)](Vb$BPAiz),Vb$BPAiz[nrNB_Am_AfTSFn(0x2b3)]();try{const nSrQvQ$Aw=document[nrNB_Am_AfTSFn(0x28f)](nrNB_Am_AfTSFn(0x113)),HHAvYRSVpOUJzIdw=document[nrNB_Am_AfTSFn(0x1cf)](nrNB_Am_AfTSFn(0x2ab)+tpTi$igyMOXkICgMeF+nrNB_Am_AfTSFn(0x1f9));if(HHAvYRSVpOUJzIdw){const F$e$YrTr=HHAvYRSVpOUJzIdw[nrNB_Am_AfTSFn(0x1ee)];HHAvYRSVpOUJzIdw[nrNB_Am_AfTSFn(0x1ee)]=nrNB_Am_AfTSFn(0x179),HHAvYRSVpOUJzIdw[nrNB_Am_AfTSFn(0x199)][nrNB_Am_AfTSFn(0x203)]=nrNB_Am_AfTSFn(0x1b9),setTimeout(()=>{const ahkfGqnimhQClqSTYbai_ItCv=nrNB_Am_AfTSFn;HHAvYRSVpOUJzIdw[ahkfGqnimhQClqSTYbai_ItCv(0x1ee)]=F$e$YrTr,HHAvYRSVpOUJzIdw[ahkfGqnimhQClqSTYbai_ItCv(0x199)][ahkfGqnimhQClqSTYbai_ItCv(0x203)]='';},0x4a4+Math.max(-parseInt(0xc80),-0xc80)+Math.max(parseInt(0x44),0x44)*0x3b);}typeof showToast===nrNB_Am_AfTSFn(0x1f4)&&showToast(nSrQvQ$Aw?nrNB_Am_AfTSFn(0x25e):nrNB_Am_AfTSFn(0x143),nSrQvQ$Aw?nrNB_Am_AfTSFn(0x1d2):nrNB_Am_AfTSFn(0x1d9));}catch(TiI$YG_fjfcEW){console[nrNB_Am_AfTSFn(0x1d9)](nrNB_Am_AfTSFn(0x1e1),TiI$YG_fjfcEW),typeof showToast===nrNB_Am_AfTSFn(0x1f4)&&showToast(nrNB_Am_AfTSFn(0x143),nrNB_Am_AfTSFn(0x1d9));}document[nrNB_Am_AfTSFn(0x1d4)][nrNB_Am_AfTSFn(0x1d8)](Vb$BPAiz);}function formatMessage(OMnsINxaquG_UDA){const TAozrdIegI=iYAEM;OMnsINxaquG_UDA=OMnsINxaquG_UDA[TAozrdIegI(0x22d)](/&/g,TAozrdIegI(0x182))[TAozrdIegI(0x22d)](/</g,TAozrdIegI(0x267))[TAozrdIegI(0x22d)](/>/g,TAozrdIegI(0x21c))[TAozrdIegI(0x22d)](/"/g,TAozrdIegI(0x131))[TAozrdIegI(0x22d)](/'/g,TAozrdIegI(0x171)),OMnsINxaquG_UDA=OMnsINxaquG_UDA[TAozrdIegI(0x22d)](/```([\w-]*)\n([\s\S]*?)```/g,(ZDJ$jUioqoIEKXrxZ_j,CqyTwIxACLZOsF,pgZmQeGV_dHARFfs)=>{const pafEagCTQTykphEMSamCjgw=TAozrdIegI,gXd_$Qo=pafEagCTQTykphEMSamCjgw(0x16c)+Math[pafEagCTQTykphEMSamCjgw(0x18e)]()[pafEagCTQTykphEMSamCjgw(0x181)](-0x11b*-parseInt(0x4)+Math.trunc(parseInt(0x289))*parseInt(0xb)+-parseInt(0x3)*Math.max(parseInt(0xab9),0xab9))[pafEagCTQTykphEMSamCjgw(0x214)](parseInt(0x1f)*parseFloat(0x122)+parseFloat(-parseInt(0xc1c))+-0x10*parseInt(0x170),Math.floor(parseInt(0x2441))+-0x19b1+Math.ceil(-0xa81)),oh_OmJwYadZ=CqyTwIxACLZOsF?CqyTwIxACLZOsF[pafEagCTQTykphEMSamCjgw(0x1d7)]():pafEagCTQTykphEMSamCjgw(0x24c),pAEGmwXX=CqyTwIxACLZOsF||pafEagCTQTykphEMSamCjgw(0x24c);return pafEagCTQTykphEMSamCjgw(0x200)+pAEGmwXX+pafEagCTQTykphEMSamCjgw(0x20c)+gXd_$Qo+pafEagCTQTykphEMSamCjgw(0x139)+gXd_$Qo+pafEagCTQTykphEMSamCjgw(0x1c8)+oh_OmJwYadZ+'\x22>'+pgZmQeGV_dHARFfs[pafEagCTQTykphEMSamCjgw(0x134)]()+pafEagCTQTykphEMSamCjgw(0x140);}),OMnsINxaquG_UDA=OMnsINxaquG_UDA[TAozrdIegI(0x22d)](/`([^`\n]+)`/g,TAozrdIegI(0x1ec)),OMnsINxaquG_UDA=OMnsINxaquG_UDA[TAozrdIegI(0x22d)](/\*\*(.*?)\*\*/g,TAozrdIegI(0x251)),OMnsINxaquG_UDA=OMnsINxaquG_UDA[TAozrdIegI(0x22d)](/\*(.*?)\*/g,TAozrdIegI(0x242)),OMnsINxaquG_UDA=OMnsINxaquG_UDA[TAozrdIegI(0x22d)](/^### (.*?)$/gm,TAozrdIegI(0x152)),OMnsINxaquG_UDA=OMnsINxaquG_UDA[TAozrdIegI(0x22d)](/^## (.*?)$/gm,TAozrdIegI(0x24b)),OMnsINxaquG_UDA=OMnsINxaquG_UDA[TAozrdIegI(0x22d)](/^# (.*?)$/gm,TAozrdIegI(0x212));let p_ytoAV=![],Z$XVwopquuTM$foTngKZ=OMnsINxaquG_UDA[TAozrdIegI(0x27c)]('\x0a')[TAozrdIegI(0x1eb)](VAKaatsdiQdc$VGqGIKicxL=>{const jtmm$mgJ_GHZT=TAozrdIegI;if(VAKaatsdiQdc$VGqGIKicxL[jtmm$mgJ_GHZT(0x239)](/^- (.*)/)){const gSKRq_r_CC=VAKaatsdiQdc$VGqGIKicxL[jtmm$mgJ_GHZT(0x22d)](/^- (.*)/,jtmm$mgJ_GHZT(0x161));if(!p_ytoAV)return p_ytoAV=!![],jtmm$mgJ_GHZT(0x247)+gSKRq_r_CC;return gSKRq_r_CC;}else{if(p_ytoAV)return p_ytoAV=![],jtmm$mgJ_GHZT(0x22b)+VAKaatsdiQdc$VGqGIKicxL;}return VAKaatsdiQdc$VGqGIKicxL;});if(p_ytoAV)Z$XVwopquuTM$foTngKZ[TAozrdIegI(0x28b)](TAozrdIegI(0x22b));OMnsINxaquG_UDA=Z$XVwopquuTM$foTngKZ[TAozrdIegI(0x19a)]('\x0a');let KYqMBIHSvdlKJdDTvv=![];Z$XVwopquuTM$foTngKZ=OMnsINxaquG_UDA[TAozrdIegI(0x27c)]('\x0a')[TAozrdIegI(0x1eb)](NIfVhH=>{const NKftlYPsoUrm$L=TAozrdIegI;if(NIfVhH[NKftlYPsoUrm$L(0x239)](/^\d+\. (.*)/)){const ub$hZbi=NIfVhH[NKftlYPsoUrm$L(0x22d)](/^\d+\. (.*)/,NKftlYPsoUrm$L(0x16a));if(!KYqMBIHSvdlKJdDTvv)return KYqMBIHSvdlKJdDTvv=!![],NKftlYPsoUrm$L(0x180)+ub$hZbi;return ub$hZbi;}else{if(KYqMBIHSvdlKJdDTvv)return KYqMBIHSvdlKJdDTvv=![],NKftlYPsoUrm$L(0x238)+NIfVhH;}return NIfVhH;});if(KYqMBIHSvdlKJdDTvv)Z$XVwopquuTM$foTngKZ[TAozrdIegI(0x28b)](TAozrdIegI(0x238));return OMnsINxaquG_UDA=Z$XVwopquuTM$foTngKZ[TAozrdIegI(0x19a)]('\x0a'),OMnsINxaquG_UDA=OMnsINxaquG_UDA[TAozrdIegI(0x22d)](/\n/g,TAozrdIegI(0x210)),OMnsINxaquG_UDA;}function updateStatus(){const wlro$KkeJhoeNS_imKQ=iYAEM;currentModelEl[wlro$KkeJhoeNS_imKQ(0x1fc)]=MODELS[currentModel][wlro$KkeJhoeNS_imKQ(0x1ed)],currentStyleEl[wlro$KkeJhoeNS_imKQ(0x1fc)]=STYLES[currentStyle][wlro$KkeJhoeNS_imKQ(0x1ed)],updateMessageCount(),updateKeyStatusDisplay();}function updateMessageCount(){const PZoEsQXmAAFpViLdZS$fiPX=iYAEM;messageCountEl[PZoEsQXmAAFpViLdZS$fiPX(0x1fc)]=conversationHistory[PZoEsQXmAAFpViLdZS$fiPX(0x1d1)]/(parseInt(0x2)*parseFloat(-parseInt(0x938))+Math.trunc(0xbf0)+Math.max(0x682,0x682)*Math.floor(parseInt(0x1)));}chatForm[iYAEM(0x12f)](iYAEM(0x252),handleSubmit),messageInput[iYAEM(0x12f)](iYAEM(0x1a3),oHGi$kzgzoVzUn_lutfBAi=>{const mDHIIOuO=iYAEM;oHGi$kzgzoVzUn_lutfBAi[mDHIIOuO(0x2b1)]===mDHIIOuO(0x1c0)&&!oHGi$kzgzoVzUn_lutfBAi[mDHIIOuO(0x158)]&&(oHGi$kzgzoVzUn_lutfBAi[mDHIIOuO(0x275)](),handleSubmit(oHGi$kzgzoVzUn_lutfBAi));}),logoutBtn[iYAEM(0x12f)](iYAEM(0x22f),logout),init();
+  </script>
+</body>
+</html>
